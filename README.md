@@ -39,16 +39,9 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 | 🔹 TOR2WEB Flooding | Anonymous penetration testing capabilities |
 | 🔹 SYN Flooding | Advanced SYN packet management *(coming soon)* |
 | 🔹 HTTP Flooding | Customizable HTTP request crafting *(coming soon)* |
-| 🔹 Proxy Support | Auto-acquisition and validation of proxies |
-| 🔹 Performance Monitoring | Real-time statistics and reporting |
+
 
 ## 🚀 Installation
-
-### Prerequisites
-
-- Python 3.6 or higher
-- Git
-- Network testing permissions
 
 ### Step-by-Step Installation
 
@@ -80,7 +73,6 @@ python main.py [attack_method] -t [targets] [options]
 |--------|-------------|--------------|
 | `udp` | UDP flood operation with customizable packet sizes | 53 |
 | `tcp` | TCP flood operation with connection pooling | 80 |
-| `tor2web` | TOR2WEB flood operation for anonymous testing | 80 |
 | `syn` | SYN flood operation *(coming soon)* | 80 |
 | `http` | HTTP flood operation *(coming soon)* | 80 |
 
