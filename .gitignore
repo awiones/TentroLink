@@ -1,0 +1,7 @@
+.qodo
+.env
+_pycache_
+.pyc
+cache
+.json
+proxy_cache.json
