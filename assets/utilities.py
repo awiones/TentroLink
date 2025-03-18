@@ -3,6 +3,10 @@ import time
 import threading
 import shutil
 from typing import List
+from urllib.parse import urlparse
+import socket
+import requests
+from typing import Optional, Tuple
 
 def get_banner():
     """Return the TentroLink banner ASCII art"""
@@ -167,35 +171,63 @@ class AttackModule:
         self.stats = {"packets_sent": 0, "bytes_sent": 0, "failures": 0, "successful": 0}
         
     def stop(self):
-        """Stop the operation"""
+        """Stop the operation gracefully"""
         self.running = False
         self._stop_event.set()
         
-        # Show a spinner while waiting for threads to finish
-        spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-        i = 0
+        # Give threads time to finish
+        UI.print_info("Waiting for threads to finish...")
         
-        max_wait = 5  # Maximum wait time in seconds
-        start_time = time.time()
-        
-        while any(t.is_alive() for t in self.thread_list):
-            if time.time() - start_time > max_wait:
-                break
-                
-            sys.stdout.write(f"\r{Style.INFO}{spinner[i % len(spinner)]}{Style.RESET} Gracefully shutting down... ")
-            sys.stdout.flush()
-            i += 1
-            time.sleep(0.1)
-        
-        # Force kill any remaining threads
         for thread in self.thread_list:
-            if thread.is_alive():
-                thread._stop()
+            try:
+                if thread.is_alive():
+                    thread.join(timeout=1)
+            except:
+                pass
         
-        print(f"\r{Style.SUCCESS}✓{Style.RESET} Operation complete                      ")
-            
+        # Print final stats if available
+        if hasattr(self, '_print_final_stats'):
+            try:
+                self._print_final_stats()
+            except:
+                pass
+        
+        UI.print_success("Operation stopped successfully")
+
     def show_stats(self):
-        """Display operation statistics"""
-        for target in self.targets:
-            for port in self.ports:
-                threading.Thread(target=UI.show_stats, args=(self.stats, self.duration, self.__class__.__name__, target, port)).start()
+        """This method should be overridden by child classes"""
+        pass
+
+def validate_target(target: str) -> Tuple[Optional[str], bool]:
+    """
+    Validates and converts URLs/hostnames to IP addresses.
+    Returns tuple of (ip_address, is_valid).
+    """
+    # Remove any protocol prefix and path
+    if '://' in target:
+        parsed = urlparse(target)
+        target = parsed.netloc or parsed.path
+    
+    # Remove port if present
+    if ':' in target:
+        target = target.split(':')[0]
+    
+    try:
+        # Try to resolve hostname to IP
+        ip = socket.gethostbyname(target)
+        
+        # Test connectivity
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        result = sock.connect_ex((ip, 80))
+        sock.close()
+        
+        if result == 0:
+            return ip, True
+        else:
+            return ip, False
+            
+    except socket.gaierror:
+        return None, False
+    except socket.error:
+        return None, False

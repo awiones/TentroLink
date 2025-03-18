@@ -11,7 +11,7 @@ import textwrap
 import ipaddress
 import shutil
 import signal
-from assets.utilities import Style, UI, AttackModule
+from assets.utilities import Style, UI, AttackModule, validate_target
 from assets.methods import UDPFlooder
 
 # Target handling and validation
@@ -25,26 +25,35 @@ class TargetManager:
         target_parts = [t.strip() for t in target_input.split(',')]
         
         for part in target_parts:
-            # Check if it's a CIDR range
+            # First try to validate as URL/hostname
+            ip, is_valid = validate_target(part)
+            if ip:
+                if is_valid:
+                    UI.print_success(f"Successfully validated target: {part} -> {ip}")
+                    targets.append(ip)
+                else:
+                    UI.print_warning(f"Target {part} ({ip}) appears to be offline")
+                    if input(f"{Style.BOLD}Add anyway? (y/n): {Style.RESET}").lower() == 'y':
+                        targets.append(ip)
+                continue
+                
+            # If not a valid URL/hostname, try CIDR/IP validation
             if '/' in part:
                 try:
                     network = ipaddress.ip_network(part, strict=False)
                     targets.extend([str(ip) for ip in network.hosts()])
                 except ValueError:
                     UI.print_error(f"Invalid CIDR notation: {part}")
-            # Check if it's a range like 192.168.1.1-192.168.1.10
             elif '-' in part:
                 try:
                     start, end = part.split('-')
                     if '.' not in end:
-                        # If end is just a number, assume same prefix as start
                         prefix = start.rsplit('.', 1)[0]
                         end = f"{prefix}.{end}"
                     
                     start_ip = ipaddress.IPv4Address(start)
                     end_ip = ipaddress.IPv4Address(end)
                     
-                    # Show a spinner for larger ranges
                     ip_count = int(end_ip) - int(start_ip) + 1
                     if ip_count > 100:
                         UI.print_info(f"Processing large IP range: {ip_count} addresses")
@@ -55,13 +64,12 @@ class TargetManager:
                         current += 1
                 except (ValueError, IndexError):
                     UI.print_error(f"Invalid IP range: {part}")
-            # Single IP
             else:
                 try:
                     ipaddress.ip_address(part)
                     targets.append(part)
                 except ValueError:
-                    UI.print_error(f"Invalid IP address: {part}")
+                    UI.print_error(f"Invalid target: {part}")
         
         return targets
 
@@ -121,16 +129,15 @@ def get_default_ports(method: str) -> List[int]:
 
 def signal_handler(signum, frame):
     """Handle Ctrl+C interrupt"""
-    UI.print_warning("\nGracefully stopping operation...")
-    # Set running flag to False for all active flooders
-    for thread in threading.enumerate():
-        if hasattr(thread, 'running'):
-            thread.running = False
+    if 'active_flooder' in globals():
+        active_flooder.stop()
     sys.exit(0)
 
 def main():
-    # Setup signal handler for Ctrl+C
+    # Setup signal handler for Ctrl+C and make flooder global
     signal.signal(signal.SIGINT, signal_handler)
+    global active_flooder
+    active_flooder = None
     
     # Check for color support
     if 'NO_COLOR' in os.environ or not sys.stdout.isatty():
@@ -341,53 +348,51 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
                     proxy_manager = None
 
     # Execute the selected operation
-    if args.command == 'udp':
-        flooder = UDPFlooder(
-            targets=targets,
-            ports=ports,
-            packet_size=args.size,
-            duration=args.duration,
-            threads=args.threads,
-            proxy_manager=proxy_manager
-        )
-        try:
-            flooder.start()
-        except KeyboardInterrupt:
-            UI.print_warning("\nStopping operation...")
-            flooder.stop()
-            sys.exit(0)
-    elif args.command == 'tcp':
-        # Import needed for TCP flood
-        from assets.methods import TCPFlooder
-        
-        flooder = TCPFlooder(
-            targets=targets,
-            ports=ports,
-            duration=args.duration,
-            threads=args.threads,
-            proxy_manager=proxy_manager
-        )
-        flooder.start()
-    elif args.command == 'syn':
-        UI.print_warning("SYN flood module not yet implemented")
-        sys.exit(1)
-    elif args.command == 'http':
-        UI.print_warning("HTTP flood module not yet implemented")
-        sys.exit(1)
-    elif args.command == 'tor2web':
-        # Import needed for TOR2WEB flood
-        from assets.methods import TOR2WebFlooder
-        
-        flooder = TOR2WebFlooder(
-            targets=targets,
-            ports=[80],  # TOR2WEB uses HTTP/HTTPS
-            duration=args.duration,
-            threads=args.threads
-        )
-        flooder.start()
+    try:
+        if args.command == 'udp':
+            active_flooder = UDPFlooder(
+                targets=targets,
+                ports=ports,
+                packet_size=args.size,
+                duration=args.duration,
+                threads=args.threads,
+                proxy_manager=proxy_manager
+            )
+            active_flooder.start()
+        elif args.command == 'tcp':
+            from assets.methods import TCPFlooder
+            active_flooder = TCPFlooder(
+                targets=targets,
+                ports=ports,
+                duration=args.duration,
+                threads=args.threads,
+                proxy_manager=proxy_manager
+            )
+            active_flooder.start()
+        elif args.command == 'syn':
+            UI.print_warning("SYN flood module not yet implemented")
+            sys.exit(1)
+        elif args.command == 'http':
+            UI.print_warning("HTTP flood module not yet implemented")
+            sys.exit(1)
+        elif args.command == 'tor2web':
+            # Import needed for TOR2WEB flood
+            from assets.methods import TOR2WebFlooder
+            
+            active_flooder = TOR2WebFlooder(
+                targets=targets,
+                ports=[80],  # TOR2WEB uses HTTP/HTTPS
+                duration=args.duration,
+                threads=args.threads
+            )
+            active_flooder.start()
+    except KeyboardInterrupt:
+        if active_flooder:
+            active_flooder.stop()
+        sys.exit(0)
 
     # Start showing stats
-    flooder.show_stats()
+    active_flooder.show_stats()
 
 if __name__ == "__main__":
     try:
