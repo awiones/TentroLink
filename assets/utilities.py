@@ -115,6 +115,33 @@ class UI:
         UI.clear_line()
         print(f"\r{Style.BLUE}[STATUS]{Style.RESET} {message}", end='', flush=True)
 
+    @staticmethod
+    def show_stats(stats, duration, method, target, port):
+        """Display operation statistics in a different format"""
+        last_packets = 0
+        last_bytes = 0
+        last_time = time.time()
+
+        while True:
+            current_time = time.time()
+            elapsed = current_time - last_time
+
+            if elapsed >= 1.0:
+                current_pps = (stats["packets_sent"] - last_packets) / elapsed
+                current_bps = (stats["bytes_sent"] - last_bytes) * 8 / elapsed
+
+                last_packets = stats["packets_sent"]
+                last_bytes = stats["bytes_sent"]
+                last_time = current_time
+
+                timestamp = time.strftime("%H:%M:%S", time.localtime(current_time))
+                pps_display = f"{current_pps:.2f}"
+                bps_display = f"{current_bps / (1024 * 1024):.2f} MB"
+
+                print(f"[{timestamp}] {Style.BOLD}Target:{Style.RESET} {target} | {Style.BOLD}Port:{Style.RESET} {port} | {Style.BOLD}Method:{Style.RESET} {method.upper()} | {Style.BOLD}PPS:{Style.RESET} {pps_display} | {Style.BOLD}BPS:{Style.RESET} {bps_display} | {Style.BOLD}Success Rate:{Style.RESET} {stats['successful'] / stats['packets_sent'] * 100 if stats['packets_sent'] > 0 else 0:.0f}%")
+
+            time.sleep(1.0)
+
 class AttackModule:
     def __init__(self, targets: List[str], ports: List[int], **kwargs):
         self.targets = targets
@@ -130,7 +157,8 @@ class AttackModule:
         }
         self.last_update_time = 0
         self.update_interval = 0.5
-
+        self._stop_event = threading.Event()
+    
     def start(self):
         """Start the operation"""
         self.running = True
@@ -141,77 +169,33 @@ class AttackModule:
     def stop(self):
         """Stop the operation"""
         self.running = False
+        self._stop_event.set()
         
         # Show a spinner while waiting for threads to finish
         spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
         i = 0
         
+        max_wait = 5  # Maximum wait time in seconds
+        start_time = time.time()
+        
+        while any(t.is_alive() for t in self.thread_list):
+            if time.time() - start_time > max_wait:
+                break
+                
+            sys.stdout.write(f"\r{Style.INFO}{spinner[i % len(spinner)]}{Style.RESET} Gracefully shutting down... ")
+            sys.stdout.flush()
+            i += 1
+            time.sleep(0.1)
+        
+        # Force kill any remaining threads
         for thread in self.thread_list:
             if thread.is_alive():
-                sys.stdout.write(f"\r{Style.INFO}{spinner[i % len(spinner)]}{Style.RESET} Gracefully shutting down... ")
-                sys.stdout.flush()
-                i += 1
-                thread.join(timeout=1)
+                thread._stop()
         
         print(f"\r{Style.SUCCESS}✓{Style.RESET} Operation complete                      ")
             
     def show_stats(self):
         """Display operation statistics"""
-        last_packets = 0
-        last_bytes = 0
-        last_time = time.time()
-        
-        terminal_width = shutil.get_terminal_size().columns
-        bar_length = min(40, terminal_width - 40)  # Adjust based on terminal width
-        
-        while self.running:
-            current_time = time.time()
-            elapsed = current_time - self.start_time
-            
-            if current_time - self.last_update_time >= self.update_interval:
-                self.last_update_time = current_time
-                
-                # Calculate current rates
-                time_diff = current_time - last_time
-                if time_diff > 0:
-                    current_pps = (self.stats["packets_sent"] - last_packets) / time_diff
-                    current_mbps = ((self.stats["bytes_sent"] - last_bytes) * 8) / (time_diff * 1000 * 1000)
-                    
-                    # Update last values
-                    last_packets = self.stats["packets_sent"]
-                    last_bytes = self.stats["bytes_sent"]
-                    last_time = current_time
-                    
-                    # Overall statistics
-                    total_mbps = (self.stats["bytes_sent"] * 8) / (elapsed * 1000 * 1000) if elapsed > 0 else 0
-                    total_pps = self.stats["packets_sent"] / elapsed if elapsed > 0 else 0
-                    
-                    # Create a simple progress bar for duration
-                    if hasattr(self, 'duration'):
-                        progress = min(elapsed / self.duration, 1.0)
-                        filled_length = int(bar_length * progress)
-                        bar = Style.SUCCESS + Style.PROGRESS_BAR * filled_length + Style.RESET + Style.DIM + Style.PROGRESS_EMPTY * (bar_length - filled_length) + Style.RESET
-                        duration_display = f" {bar} {progress*100:.1f}% "
-                    else:
-                        duration_display = ""
-                    
-                    # Calculate success rate
-                    total_attempts = self.stats["packets_sent"]
-                    success_rate = (self.stats["successful"] / total_attempts * 100) if total_attempts > 0 else 0
-                    
-                    status_line = (
-                        f"\r{Style.BOLD}[Runtime: {elapsed:.1f}s]{Style.RESET}{duration_display}"
-                        f"| {Style.INFO}Packets:{Style.RESET} {self.stats['packets_sent']:,} "
-                        f"| {Style.INFO}Success Rate:{Style.RESET} {success_rate:.1f}% "
-                        f"| {Style.INFO}Current:{Style.RESET} {current_mbps:.2f} Mbps ({current_pps:.0f} pps) "
-                        f"| {Style.INFO}Avg:{Style.RESET} {total_mbps:.2f} Mbps"
-                    )
-                    
-                    # Truncate status line if it's too long for the terminal
-                    if len(status_line) > terminal_width:
-                        status_line = status_line[:terminal_width-3] + "..."
-                    
-                    sys.stdout.write(status_line)
-                    sys.stdout.flush()
-            
-            time.sleep(0.1)
+        for target in self.targets:
+            for port in self.ports:
+                threading.Thread(target=UI.show_stats, args=(self.stats, self.duration, self.__class__.__name__, target, port)).start()

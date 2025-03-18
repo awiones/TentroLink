@@ -10,6 +10,7 @@ from typing import List, Tuple, Dict, Any, Optional
 import textwrap
 import ipaddress
 import shutil
+import signal
 from assets.utilities import Style, UI, AttackModule
 from assets.methods import UDPFlooder
 
@@ -118,7 +119,19 @@ def get_default_ports(method: str) -> List[int]:
     }
     return default_ports.get(method, [80])  # Default to port 80 if method not found
 
+def signal_handler(signum, frame):
+    """Handle Ctrl+C interrupt"""
+    UI.print_warning("\nGracefully stopping operation...")
+    # Set running flag to False for all active flooders
+    for thread in threading.enumerate():
+        if hasattr(thread, 'running'):
+            thread.running = False
+    sys.exit(0)
+
 def main():
+    # Setup signal handler for Ctrl+C
+    signal.signal(signal.SIGINT, signal_handler)
+    
     # Check for color support
     if 'NO_COLOR' in os.environ or not sys.stdout.isatty():
         Style.disable_colors()
@@ -337,7 +350,12 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
             threads=args.threads,
             proxy_manager=proxy_manager
         )
-        flooder.start()
+        try:
+            flooder.start()
+        except KeyboardInterrupt:
+            UI.print_warning("\nStopping operation...")
+            flooder.stop()
+            sys.exit(0)
     elif args.command == 'tcp':
         # Import needed for TCP flood
         from assets.methods import TCPFlooder
@@ -368,13 +386,15 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
         )
         flooder.start()
 
+    # Start showing stats
+    flooder.show_stats()
+
 if __name__ == "__main__":
-    # Handle keyboard interrupts gracefully
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n{Style.WARNING}Operation interrupted by user{Style.RESET}")
-        sys.exit(0)
+        # This should now be handled by the signal handler
+        pass
     except Exception as e:
         print(f"\n{Style.ERROR}An unexpected error occurred: {e}{Style.RESET}")
         sys.exit(1)
