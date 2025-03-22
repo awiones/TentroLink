@@ -147,17 +147,17 @@ class UI:
             time.sleep(1.0)
 
 class AttackModule:
-    def __init__(self, targets: List[str], ports: List[int], **kwargs):
+    def __init__(self, targets: List[str], ports: List[int], skip_prompt: bool = False):
         self.targets = targets
         self.ports = ports
         self.running = False
-        self.start_time = 0
         self.thread_list: List[threading.Thread] = []
+        self.skip_prompt = skip_prompt
         self.stats = {
             "packets_sent": 0,
             "bytes_sent": 0,
             "failures": 0,
-            "successful": 0  # Add success tracking
+            "successful": 0
         }
         self.last_update_time = 0
         self.update_interval = 0.5
@@ -198,7 +198,7 @@ class AttackModule:
         """This method should be overridden by child classes"""
         pass
 
-def validate_target(target: str) -> Tuple[Optional[str], bool]:
+def validate_target(target: str, skip_prompt: bool = False) -> Tuple[Optional[str], bool]:
     """
     Validates and converts URLs/hostnames to IP addresses.
     Returns tuple of (ip_address, is_valid).
@@ -222,10 +222,11 @@ def validate_target(target: str) -> Tuple[Optional[str], bool]:
         result = sock.connect_ex((ip, 80))
         sock.close()
         
-        if result == 0:
+        # Always return True if skip_prompt is enabled
+        if skip_prompt:
             return ip, True
-        else:
-            return ip, False
+            
+        return ip, result == 0
             
     except socket.gaierror:
         return None, False

@@ -17,7 +17,7 @@ from assets.methods import UDPFlooder
 # Target handling and validation
 class TargetManager:
     @staticmethod
-    def parse_targets(target_input: str) -> List[str]:
+    def parse_targets(target_input: str, skip_prompt: bool = False) -> List[str]:
         """Parse target input into a list of IP addresses"""
         targets = []
         
@@ -26,14 +26,14 @@ class TargetManager:
         
         for part in target_parts:
             # First try to validate as URL/hostname
-            ip, is_valid = validate_target(part)
+            ip, is_valid = validate_target(part, skip_prompt)
             if ip:
-                if is_valid:
+                if is_valid or skip_prompt:
                     UI.print_success(f"Successfully validated target: {part} -> {ip}")
                     targets.append(ip)
                 else:
                     UI.print_warning(f"Target {part} ({ip}) appears to be offline")
-                    if input(f"{Style.BOLD}Add anyway? (y/n): {Style.RESET}").lower() == 'y':
+                    if skip_prompt or input(f"{Style.BOLD}Add anyway? (y/n): {Style.RESET}").lower() == 'y':
                         targets.append(ip)
                 continue
                 
@@ -156,6 +156,8 @@ def main():
                            help='Use proxies (file path or "auto")')
     base_parser.add_argument('--proxy-threads', type=int, default=10,
                            help='Number of threads for proxy validation (default: 10)')
+    base_parser.add_argument('-y', '--yes', action='store_true',
+                           help='Skip all confirmation prompts')
     
     # Create the main parser that inherits from base_parser
     parser = argparse.ArgumentParser(
@@ -191,8 +193,8 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
                            - Port range (e.g., 80-100)
                            - Service names (e.g., http,https,dns)
                            Default: method-specific ports''')
-    udp_parser.add_argument('-s', '--size', type=int, default=1024,
-                           help='Size of each UDP packet in bytes (default: 1024)')
+    udp_parser.add_argument('-s', '--size', type=int, default=30720,  # 30MB = 30 * 1024
+                           help='Size of each UDP packet in bytes (default: 30KB)')
     udp_parser.add_argument('-d', '--duration', type=int, default=60,
                            help='Duration of the attack in seconds (default: 60)')
     udp_parser.add_argument('-T', '--threads', type=int, default=5,
@@ -250,6 +252,8 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
                            help='Target specification (same format as UDP flood)')
     tcp_parser.add_argument('-p', '--ports', required=False,
                            help='Port specification (optional, default: 80,443)')
+    tcp_parser.add_argument('-s', '--size', type=int, default=30720,  # 30MB = 30 * 1024
+                           help='Size of TCP packets in bytes (default: 30KB)')
     tcp_parser.add_argument('-d', '--duration', type=int, default=60,
                            help='Duration of the attack in seconds (default: 60)')
     tcp_parser.add_argument('-T', '--threads', type=int, default=10,
@@ -279,7 +283,7 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
         sys.exit(1)
     
     # Parse targets and ports
-    targets = TargetManager.parse_targets(args.targets)
+    targets = TargetManager.parse_targets(args.targets, args.yes)
     ports = TargetManager.parse_ports(args.ports) if args.ports else get_default_ports(args.command)
     
     if not targets:
@@ -299,7 +303,7 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
     
     # Warn about large operations
     operation_size = len(targets) * len(ports) * args.threads
-    if operation_size > 1000:
+    if operation_size > 1000 and not args.yes:
         UI.print_warning(f"This operation will create {operation_size} connections.")
         confirmation = input(f"{Style.BOLD}Are you sure you want to continue? (y/n): {Style.RESET}")
         if confirmation.lower() != 'y':
@@ -356,7 +360,8 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
                 packet_size=args.size,
                 duration=args.duration,
                 threads=args.threads,
-                proxy_manager=proxy_manager
+                proxy_manager=proxy_manager,
+                skip_prompt=args.yes
             )
             active_flooder.start()
         elif args.command == 'tcp':
@@ -364,17 +369,29 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
             active_flooder = TCPFlooder(
                 targets=targets,
                 ports=ports,
+                packet_size=args.size,  # Add packet_size parameter
                 duration=args.duration,
                 threads=args.threads,
-                proxy_manager=proxy_manager
+                proxy_manager=proxy_manager,
+                skip_prompt=args.yes
             )
             active_flooder.start()
         elif args.command == 'syn':
             UI.print_warning("SYN flood module not yet implemented")
             sys.exit(1)
         elif args.command == 'http':
-            UI.print_warning("HTTP flood module not yet implemented")
-            sys.exit(1)
+            from assets.methods import HTTPFlooder
+            active_flooder = HTTPFlooder(
+                targets=targets,
+                ports=ports,
+                duration=args.duration,
+                threads=args.threads,
+                method=args.method,
+                path=args.path,
+                proxy_manager=proxy_manager,
+                skip_prompt=args.yes
+            )
+            active_flooder.start()
         elif args.command == 'tor2web':
             # Import needed for TOR2WEB flood
             from assets.methods import TOR2WebFlooder
@@ -383,7 +400,8 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
                 targets=targets,
                 ports=[80],  # TOR2WEB uses HTTP/HTTPS
                 duration=args.duration,
-                threads=args.threads
+                threads=args.threads,
+                skip_prompt=args.yes
             )
             active_flooder.start()
     except KeyboardInterrupt:
