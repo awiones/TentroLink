@@ -1,14 +1,14 @@
 # TentroLink
 
-<div align="center">  
+<div align="center">
 
-<img src="https://github.com/awiones/TentroLink/blob/main/assets/images/_Qbi9yCfTcG023xENbqkmA.jpg" alt="TentroLink Logo" width="250"/>  
+<img src="https://github.com/awiones/TentroLink/blob/main/assets/images/_Qbi9yCfTcG023xENbqkmA.jpg" alt="TentroLink Logo" width="250"/>
 
-**Advanced Network Testing & Security Assessment Toolkit**  
+**Advanced Network Testing & Security Assessment Toolkit**
 
 <p>  
   <a href="https://github.com/awiones/TentroLink">
-    <img src="https://img.shields.io/badge/version-0.1-blue?style=for-the-badge">
+    <img src="https://img.shields.io/badge/version-0.3-blue?style=for-the-badge">
   </a>  
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge">
@@ -16,7 +16,7 @@
   <a href="https://www.python.org/">
     <img src="https://img.shields.io/badge/python-3.6+-yellow?style=for-the-badge&logo=python">
   </a>  
-</p>  
+</p>
 
 </div>
 
@@ -28,19 +28,17 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 
 > **IMPORTANT**: TentroLink is designed and should be used ONLY for authorized network testing, security research, and educational purposes. Usage of this tool against targets without explicit permission is illegal and unethical. The developers of TentroLink assume no liability and are not responsible for any misuse or damage caused by this tool.
 >
-> **You are responsible for your actions. Use this tool responsibly and legally.**
-> **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**
+> **You are responsible for your actions. Use this tool responsibly and legally.** > **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**
 
 ## 🛠️ Key Features
 
-| Feature | Description |
-|---------|-------------|
-| 🔹 UDP Flooding | Enhanced DNS attack techniques with optimized payloads |
-| 🔹 TCP Flooding | Optimized connection handling with pool management |
-| 🔹 TOR2WEB Flooding | Anonymous penetration testing capabilities |
-| 🔹 SYN Flooding | Advanced SYN packet management *(coming soon)* |
-| 🔹 HTTP Flooding | Customizable HTTP request crafting *(coming soon)* |
-
+| Feature             | Description                                            |
+| ------------------- | ------------------------------------------------------ |
+| 🔹 UDP Flooding     | Enhanced DNS attack techniques with optimized payloads |
+| 🔹 TCP Flooding     | Optimized connection handling with pool management     |
+| 🔹 HTTP Flooding    | Advanced HTTP/HTTPS flooding with custom payloads      |
+| 🔹 TOR2WEB Flooding | Anonymous penetration testing capabilities             |
+| 🔹 SYN Flooding     | Advanced SYN packet management _(coming soon)_         |
 
 ## 🚀 Installation
 
@@ -70,25 +68,25 @@ python main.py [attack_method] -t [targets] [options]
 
 ### Available Testing Methods
 
-| Method | Description | Default Port |
-|--------|-------------|--------------|
-| `udp` | UDP flood operation with customizable packet sizes | 53 |
-| `tcp` | TCP flood operation with connection pooling | 80 |
-| `syn` | SYN flood operation *(coming soon)* | 80 |
-| `http` | HTTP flood operation *(coming soon)* | 80 |
+| Method | Description                                        | Default Port |
+| ------ | -------------------------------------------------- | ------------ |
+| `udp`  | UDP flood operation with customizable packet sizes | 53           |
+| `tcp`  | TCP flood operation with connection pooling        | 80           |
+| `syn`  | SYN flood operation _(coming soon)_                | 80           |
+| `http` | HTTP flood operation                               | 80           |
 
 ### Common Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-t, --targets` | Target specification (IP, domain, CIDR) | *Required* |
-| `-p, --ports` | Port specification (single, range, named) | Method-specific |
-| `-d, --duration` | Duration in seconds | 60 |
-| `-T, --threads` | Number of threads | Method-specific |
-| `-v, --verbose` | Enable verbose output | False |
-| `--no-color` | Disable colored output | False |
-| `--proxy` | Use proxies (file path or "auto") | None |
-| `--proxy-threads` | Threads for proxy validation | 10 |
+| Option            | Description                               | Default         |
+| ----------------- | ----------------------------------------- | --------------- |
+| `-t, --targets`   | Target specification (IP, domain, CIDR)   | _Required_      |
+| `-p, --ports`     | Port specification (single, range, named) | Method-specific |
+| `-d, --duration`  | Duration in seconds                       | 60              |
+| `-T, --threads`   | Number of threads                         | Method-specific |
+| `-v, --verbose`   | Enable verbose output                     | False           |
+| `--no-color`      | Disable colored output                    | False           |
+| `--proxy`         | Use proxies (file path or "auto")         | None            |
+| `--proxy-threads` | Threads for proxy validation              | 10              |
 
 ### Quick Examples
 
@@ -113,6 +111,7 @@ python main.py udp -t 192.168.1.1 -p 53 -s 1024 -d 60 -T 5
 ```
 
 **Additional options:**
+
 - `-s, --size`: Size of each UDP packet in bytes (default: 1024)
 
 ### TCP Testing
@@ -121,6 +120,24 @@ python main.py udp -t 192.168.1.1 -p 53 -s 1024 -d 60 -T 5
 # Testing multiple ports with increased threads
 python main.py tcp -t 192.168.1.1 -p 80,443 -d 60 -T 10
 ```
+
+### HTTP Testing
+
+```bash
+# Basic HTTP flood test
+python main.py http -t example.com -p 80 --method GET -d 60 -T 10
+
+# HTTP POST flood with increased threads
+python main.py http -t example.com -p 80 --method POST -d 60 -T 20
+
+# Custom path with HTTPS
+python main.py http -t example.com -p 443 --method GET --path /api/v1/test
+```
+
+**Additional options:**
+
+- `--method`: HTTP method to use (GET/POST/HEAD, default: GET)
+- `--path`: Target URL path (default: /)
 
 ### Proxy Configuration
 
@@ -173,20 +190,6 @@ TentroLink uses a modular architecture consisting of:
 2. **Attack Modules** - Specialized implementations for different testing methodologies
 3. **Proxy Manager** - Handles proxy acquisition, validation, and rotation
 4. **Metrics Collector** - Gathers and displays real-time performance data
-
-## 📝 Development Roadmap
-
-| Feature | Status | Target Release |
-|---------|--------|----------------|
-| UDP Flooding | ✅ Completed | v0.1 |
-| TCP Flooding | ✅ Completed | v0.1 |
-| Proxy support | ✅ Completed | v0.1 |
-| Performance monitoring | ✅ Completed | v0.1 |
-| SYN Flooding | 🔄 In Progress | v0.2 |
-| HTTP Flooding | 🔄 In Progress | v0.2 |
-| HTTPS/SSL support | 📅 Planned | v0.3 |
-| Layer 7 DDoS protection bypass | 📅 Planned | v0.3 |
-| Distributed attack coordination | 📅 Planned | v0.4 |
 
 ## 🐛 Troubleshooting
 
