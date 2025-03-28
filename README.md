@@ -107,12 +107,8 @@ python main.py udp -t 192.168.1.1 --proxy auto
 
 ```bash
 # Custom packet size
-python main.py udp -t 192.168.1.1 -p 53 -s 1024 -d 60 -T 5
+python main.py udp -t 192.168.1.1 -p 53 -d 60 -T 5
 ```
-
-**Additional options:**
-
-- `-s, --size`: Size of each UDP packet in bytes (default: 1024)
 
 ### TCP Testing
 
