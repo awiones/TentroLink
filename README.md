@@ -162,12 +162,18 @@ python main.py udp -t 192.168.1.0/24 -p 80-100 -d 120
 python main.py tcp -t 192.168.1.1,192.168.1.2 -p http,https -d 60 -T 20
 ```
 
-## 📸 Screenshots
+## 📸 Screenshots  
 
-<div align="center">
-  <img src="assets/images/test%20stat.PNG" alt="Test Statistics" width="80%"/>
-  <p><em>Example of network test statistics output</em></p>
+<div align="center">  
+  <img src="assets/images/test%20stat.PNG" alt="Test Statistics" width="80%"/>  
+  <p><em>Example of network test statistics output</em></p>  
+
+  🎥 **Watch the Demo:**  
+  <a href="https://youtu.be/t8iBKDLMi8Q" target="_blank">  
+    <img src="https://img.youtube.com/vi/t8iBKDLMi8Q/maxresdefault.jpg" alt="YouTube Video Thumbnail" width="80%"/>  
+  </a>  
 </div>
+
 
 ## 🔍 Technical Details
 
