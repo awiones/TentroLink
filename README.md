@@ -193,22 +193,6 @@ TentroLink uses a modular architecture consisting of:
 3. **Proxy Manager** - Handles proxy acquisition, validation, and rotation
 4. **Metrics Collector** - Gathers and displays real-time performance data
 
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Permission errors**: Run with administrator/root privileges for low-level network operations
-2. **Proxy connection failures**: Check network connectivity and proxy validity
-3. **Performance issues**: Reduce thread count on systems with limited resources
-
-### Debugging
-
-Enable verbose output for detailed logging:
-
-```bash
-python main.py udp -t 192.168.1.1 -v
-```
-
 ## 🤝 Contributing
 
 We welcome contributions from the security research community! Here's how you can help:
