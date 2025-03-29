@@ -174,20 +174,47 @@ def main():
     
     # Create the main parser that inherits from base_parser
     parser = argparse.ArgumentParser(
-        description="""
-TentroLink - Advanced Network Testing Toolkit
--------------------------------------------
-A comprehensive toolkit for network stress testing and performance measurement.
-Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
-        """,
+        description=f"""
+{Style.BLUE}╔════════════════════════════════════════════════╗
+║  TentroLink - Network Testing & Analysis Tool  ║
+╚════════════════════════════════════════════════╝{Style.RESET}
+
+{Style.BOLD}Description:{Style.RESET}
+  A comprehensive toolkit for network testing and analysis.
+  Supports multiple attack methods with customizable parameters.
+
+{Style.BOLD}Features:{Style.RESET}
+  • UDP/TCP Flooding     • SYN Flooding
+  • HTTP Request Flood   • TOR2WEB Gateway Flood
+  • Minecraft Protocol   • Proxy Support
+""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         parents=[base_parser]
     )
-    
-    # Create subparsers
-    subparsers = parser.add_subparsers(dest='command',
-                                      help='Operation type (udp, syn, http, tcp)')
-    
+
+    # Create subparsers with better formatting
+    subparsers = parser.add_subparsers(
+        title=f'{Style.BOLD}Available Methods{Style.RESET}',
+        dest='command',
+        metavar=f'{Style.BLUE}METHOD{Style.RESET}'
+    )
+
+    # Update parser headings
+    parser._positionals.title = f'{Style.BLUE}Commands{Style.RESET}'
+    parser._optionals.title = f'{Style.BLUE}Global Options{Style.RESET}'
+
+    # If no command is provided, print custom help with examples
+    if len(sys.argv) == 1:
+        parser.print_help()
+        print(f"""
+{Style.BOLD}Examples:{Style.RESET}
+  Basic UDP Flood:    {Style.DIM}./main.py udp -t example.com -p 80{Style.RESET}
+  HTTP Flood:         {Style.DIM}./main.py http -t example.com -T 10{Style.RESET}
+  Multi-Target TCP:   {Style.DIM}./main.py tcp -t 192.168.1.1,192.168.1.2{Style.RESET}
+  With Proxies:       {Style.DIM}./main.py syn -t example.com --proxy auto{Style.RESET}
+""")
+        sys.exit(1)
+
     # UDP Flood parser with enhanced help
     udp_parser = subparsers.add_parser('udp', 
         help='UDP flood operation',
