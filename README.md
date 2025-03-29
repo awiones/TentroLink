@@ -16,6 +16,9 @@
   <a href="https://www.python.org/">
     <img src="https://img.shields.io/badge/python-3.6+-yellow?style=for-the-badge&logo=python">
   </a>  
+  <a href="https://github.com/awiones/TentroLink/blob/main/document.md">
+    <img src="https://img.shields.io/badge/documentation-click%20here-lightgrey?style=for-the-badge">
+  </a>  
 </p>
 
 </div>
