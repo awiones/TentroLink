@@ -1,10 +1,10 @@
-
-# TentroLink v0.3 Documentation
+# TentroLink v0.4 Documentation
 
 <div align="center">
 <img src="https://github.com/awiones/TentroLink/blob/main/assets/images/_Qbi9yCfTcG023xENbqkmA.jpg" alt="TentroLink Logo" width="250"/>
 
 **Advanced Network Testing & Security Assessment Toolkit**
+
 </div>
 
 ## Table of Contents
@@ -29,11 +29,12 @@
 
 ## Introduction
 
-TentroLink is an advanced network testing toolkit designed for legitimate security testing and network resilience evaluation. Version 0.3 introduces several enhancements to the core functionality and adds new testing capabilities.
+TentroLink is an advanced network testing toolkit designed for legitimate security testing and network resilience evaluation. Version 0.4 introduces several enhancements to the core functionality and adds new testing capabilities, including the SYN flooding module.
 
 ### Purpose
 
 TentroLink helps security professionals:
+
 - Assess network infrastructure resilience
 - Identify potential bottlenecks and vulnerabilities
 - Test DDoS mitigation systems
@@ -70,6 +71,7 @@ python main.py --version
 ### Dependencies
 
 TentroLink requires the following Python packages:
+
 - `requests`: For HTTP operations and proxy validation
 - `scapy`: For low-level packet manipulation (SYN flooding)
 - Additional dependencies listed in `requirements.txt`
@@ -88,6 +90,7 @@ TentroLink is built on a modular architecture consisting of:
 ### Design Philosophy
 
 TentroLink follows these design principles:
+
 - **Modularity**: Each attack type is implemented as a separate module
 - **Efficiency**: Optimized resource usage for maximum performance
 - **Flexibility**: Customizable parameters for different testing scenarios
@@ -105,29 +108,29 @@ python main.py [attack_method] -t [targets] [options]
 
 ### Global Options
 
-| Option            | Description                               | Default    |
-|-------------------|-------------------------------------------|------------|
-| `-h, --help`      | Show help message                         | -          |
-| `--version`       | Show version information                  | -          |
-| `--no-color`      | Disable colored output                    | False      |
-| `-y, --yes`       | Skip confirmation prompts                 | False      |
-| `-v, --verbose`   | Enable verbose output                     | False      |
+| Option          | Description               | Default |
+| --------------- | ------------------------- | ------- |
+| `-h, --help`    | Show help message         | -       |
+| `--version`     | Show version information  | -       |
+| `--no-color`    | Disable colored output    | False   |
+| `-y, --yes`     | Skip confirmation prompts | False   |
+| `-v, --verbose` | Enable verbose output     | False   |
 
 ### Common Attack Options
 
-| Option            | Description                               | Default         |
-|-------------------|-------------------------------------------|-----------------|
-| `-t, --targets`   | Target specification (IP, domain, CIDR)   | _Required_      |
-| `-p, --ports`     | Port specification (single, range, named) | Method-specific |
-| `-d, --duration`  | Duration in seconds                       | 60              |
-| `-T, --threads`   | Number of threads                         | Method-specific |
+| Option           | Description                               | Default         |
+| ---------------- | ----------------------------------------- | --------------- |
+| `-t, --targets`  | Target specification (IP, domain, CIDR)   | _Required_      |
+| `-p, --ports`    | Port specification (single, range, named) | Method-specific |
+| `-d, --duration` | Duration in seconds                       | 60              |
+| `-T, --threads`  | Number of threads                         | Method-specific |
 
 ### Proxy Options
 
-| Option            | Description                               | Default    |
-|-------------------|-------------------------------------------|------------|
-| `--proxy`         | Use proxies (file path or "auto")         | None       |
-| `--proxy-threads` | Threads for proxy validation              | 10         |
+| Option            | Description                       | Default |
+| ----------------- | --------------------------------- | ------- |
+| `--proxy`         | Use proxies (file path or "auto") | None    |
+| `--proxy-threads` | Threads for proxy validation      | 10      |
 
 ## Attack Modules
 
@@ -143,10 +146,10 @@ python main.py udp -t [targets] [options]
 
 #### Specific Options
 
-| Option          | Description                          | Default |
-|-----------------|--------------------------------------|---------|
-| `-s, --size`    | Size of UDP packets in bytes         | 30720   |
-| `-p, --ports`   | Target ports                         | 53      |
+| Option        | Description                  | Default |
+| ------------- | ---------------------------- | ------- |
+| `-s, --size`  | Size of UDP packets in bytes | 30720   |
+| `-p, --ports` | Target ports                 | 53      |
 
 #### Examples
 
@@ -161,6 +164,7 @@ python main.py udp -t 192.168.1.1 -p 53 -s 1024 -d 60 -T 5
 #### Technical Details
 
 The UDP module:
+
 - Generates optimized payloads based on target port
 - Uses socket pooling for efficient resource management
 - Provides real-time statistics on packets sent and bandwidth
@@ -177,10 +181,10 @@ python main.py tcp -t [targets] [options]
 
 #### Specific Options
 
-| Option          | Description                          | Default |
-|-----------------|--------------------------------------|---------|
-| `-s, --size`    | Size of TCP packets in bytes         | 30720   |
-| `-p, --ports`   | Target ports                         | 80,443  |
+| Option        | Description                  | Default |
+| ------------- | ---------------------------- | ------- |
+| `-s, --size`  | Size of TCP packets in bytes | 30720   |
+| `-p, --ports` | Target ports                 | 80,443  |
 
 #### Examples
 
@@ -195,6 +199,7 @@ python main.py tcp -t 192.168.1.1 -p 80,443 -d 60 -T 10
 #### Technical Details
 
 The TCP module:
+
 - Establishes and maintains multiple TCP connections
 - Sends data through established connections
 - Implements connection pooling for efficiency
@@ -211,11 +216,11 @@ python main.py http -t [targets] [options]
 
 #### Specific Options
 
-| Option          | Description                          | Default |
-|-----------------|--------------------------------------|---------|
-| `--method`      | HTTP method (GET/POST/HEAD)          | GET     |
-| `--path`        | Target URL path                      | /       |
-| `-p, --ports`   | Target ports                         | 80,443  |
+| Option        | Description                 | Default |
+| ------------- | --------------------------- | ------- |
+| `--method`    | HTTP method (GET/POST/HEAD) | GET     |
+| `--path`      | Target URL path             | /       |
+| `-p, --ports` | Target ports                | 80,443  |
 
 #### Examples
 
@@ -233,6 +238,7 @@ python main.py http -t example.com -p 443 --method GET --path /api/v1/test
 #### Technical Details
 
 The HTTP module:
+
 - Supports GET, POST, and HEAD methods
 - Handles both HTTP and HTTPS protocols
 - Uses connection pooling for efficient resource usage
@@ -250,10 +256,10 @@ python main.py tor2web -t [targets] [options]
 
 #### Specific Options
 
-| Option          | Description                          | Default |
-|-----------------|--------------------------------------|---------|
-| `-d, --duration`| Duration in seconds                  | 60      |
-| `-T, --threads` | Number of threads                    | 5       |
+| Option           | Description         | Default |
+| ---------------- | ------------------- | ------- |
+| `-d, --duration` | Duration in seconds | 60      |
+| `-T, --threads`  | Number of threads   | 5       |
 
 #### Examples
 
@@ -265,6 +271,7 @@ python main.py tor2web -t example.onion -d 30 -T 5
 #### Technical Details
 
 The TOR2WEB module:
+
 - Uses multiple TOR2WEB gateways for request distribution
 - Converts .onion addresses to TOR2WEB format
 - Rotates user agents to avoid detection
@@ -272,7 +279,53 @@ The TOR2WEB module:
 
 ### SYN Flooding
 
-> **Note**: The SYN flooding module is planned for future releases and is not yet implemented in version 0.3.
+The SYN flooding module (added in v0.4) tests target systems' ability to handle TCP SYN packet floods.
+
+> **Note**: Currently there is a known issue where the BPS (bytes per second) throughput is lower than expected. This is being investigated and will be fixed in a future update.
+
+#### Command Syntax
+
+```bash
+python main.py syn -t [targets] [options]
+```
+
+#### Specific Options
+
+| Option           | Description            | Default |
+| ---------------- | ---------------------- | ------- |
+| `-p, --ports`    | Target ports           | 80      |
+| `-T, --threads`  | Number of threads      | 5       |
+| `-d, --duration` | Duration in seconds    | 60      |
+| `-y, --yes`      | Skip target validation | False   |
+
+#### Examples
+
+```bash
+# Basic SYN flood test
+python main.py syn -t example.com -p 80 -d 60
+
+# High intensity test with more threads
+python main.py syn -t example.com -p 80 -T 100 -d 120
+
+# Multiple ports
+python main.py syn -t example.com -p 80,443 -T 50
+```
+
+#### Technical Details
+
+The SYN flood module:
+
+- Supports both raw sockets (with root/admin) and normal sockets
+- Implements IP spoofing when using raw sockets
+- Uses optimized packet generation and sending
+- Provides real-time performance metrics
+- Features socket pooling for better resource management
+
+#### Current Limitations
+
+1. **BPS Performance**: Currently experiencing lower than expected bytes-per-second throughput. Working on optimization.
+2. **Raw Socket Requirements**: Full capabilities (IP spoofing, custom packets) require root/admin privileges
+3. **Platform Specific**: Some features may be limited on certain operating systems
 
 ## Proxy Management
 
@@ -299,6 +352,7 @@ python main.py udp -t 192.168.1.1 --proxy auto --proxy-threads 20
 ### Proxy File Format
 
 Proxy files should contain one proxy per line in the following formats:
+
 ```
 ip:port
 http://username:password@ip:port
@@ -336,6 +390,7 @@ TentroLink provides comprehensive real-time and summary metrics for all testing 
 ### Real-time Metrics
 
 During operation, TentroLink displays:
+
 - Packets/requests sent per second
 - Bandwidth utilization (Mbps)
 - Success/failure rates
@@ -344,6 +399,7 @@ During operation, TentroLink displays:
 ### Summary Statistics
 
 After completion, TentroLink provides a summary including:
+
 - Total duration
 - Total packets/requests sent
 - Total data transferred
@@ -386,6 +442,7 @@ python main.py http -t 192.168.1.1 -d 30
 ### Common Issues
 
 1. **Permission errors**
+
    - **Symptom**: "Permission denied" errors
    - **Solution**: Run with administrator/root privileges
 
@@ -394,6 +451,7 @@ python main.py http -t 192.168.1.1 -d 30
    ```
 
 2. **Proxy connection failures**
+
    - **Symptom**: "Failed to connect through proxy" errors
    - **Solution**: Check proxy validity or try automatic proxy acquisition
 
@@ -402,6 +460,7 @@ python main.py http -t 192.168.1.1 -d 30
    ```
 
 3. **Performance issues**
+
    - **Symptom**: Low packets per second or bandwidth
    - **Solution**: Adjust thread count and packet size
 
@@ -422,6 +481,7 @@ python main.py udp -t 192.168.1.1 -v
 ### Authorized Testing Only
 
 TentroLink should only be used for:
+
 - Testing your own systems
 - Systems you have explicit permission to test
 - Educational environments with proper authorization
@@ -429,6 +489,7 @@ TentroLink should only be used for:
 ### Documentation
 
 Always document:
+
 - Written authorization before testing
 - Testing scope and parameters
 - Testing timeline
@@ -460,6 +521,7 @@ python main.py udp -t 192.168.1.1 --no-color
 ### Attack Module Base Class
 
 All attack modules inherit from the `AttackModule` base class, which provides:
+
 - Target and port validation
 - Thread management
 - Statistics collection
@@ -468,6 +530,7 @@ All attack modules inherit from the `AttackModule` base class, which provides:
 ### Payload Optimization
 
 TentroLink dynamically optimizes payloads based on:
+
 - Target service (port)
 - Available system resources
 - Network conditions
@@ -475,6 +538,7 @@ TentroLink dynamically optimizes payloads based on:
 ### Thread Management
 
 Thread allocation is balanced based on:
+
 - Number of targets
 - Number of ports
 - System capabilities
@@ -485,5 +549,3 @@ Thread allocation is balanced based on:
 <div align="center">
   <strong>Remember: With great power comes great responsibility. Use TentroLink ethically and legally.</strong>
 </div>
-</qodoArtifact>
-

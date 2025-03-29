@@ -4,11 +4,17 @@ TentroLink Assets Package
 Contains attack method implementations and utilities.
 """
 
-__version__ = "0.1"
+__version__ = "0.4"
 __author__ = "TentroLink"
 
-# Only import what's currently implemented
-from .methods import UDPFlooder
+# Import all implemented attack methods
+from .methods import (
+    UDPFlooder,
+    TCPFlooder,
+    HTTPFlooder,
+    TOR2WebFlooder,
+    SYNFlooder
+)
 from .utilities import AttackModule, UI, Style
 
 # Ensure cache directory exists
@@ -22,6 +28,10 @@ if not os.path.exists(cache_dir):
 
 __all__ = [
     'UDPFlooder',
+    'TCPFlooder',
+    'HTTPFlooder',
+    'TOR2WebFlooder',
+    'SYNFlooder',
     'AttackModule',
     'UI',
     'Style'

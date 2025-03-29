@@ -10,12 +10,12 @@ from typing import Optional, Tuple
 
 def get_banner():
     """Return the TentroLink banner ASCII art"""
-    banner = """
+    banner = r"""
 __ __|             |               
    |   _ \  __ \   __|   _ \    __|
    |   __/  |   |  |    (   |  |   
   _| \___| _|  _| \__| \___/  _|   
-  Tentor V0.3
+  Tentor V0.4
   Made By github.com/awiones
 """
     return banner
@@ -162,6 +162,8 @@ class AttackModule:
         self.last_update_time = 0
         self.update_interval = 0.5
         self._stop_event = threading.Event()
+        self.thread_list = []
+        self._stats_thread = None
     
     def start(self):
         """Start the operation"""
@@ -171,32 +173,46 @@ class AttackModule:
         self.stats = {"packets_sent": 0, "bytes_sent": 0, "failures": 0, "successful": 0}
         
     def stop(self):
-        """Stop the operation gracefully"""
+        """Stop the operation gracefully with quick timeout"""
+        if not self.running:
+            return
+
         self.running = False
         self._stop_event.set()
         
-        # Give threads time to finish
-        UI.print_info("Waiting for threads to finish...")
+        # Quick cleanup with 500ms total timeout
+        cleanup_timeout = 0.5
+        cleanup_start = time.time()
         
-        for thread in self.thread_list:
+        # Stop all attack threads
+        for thread in self.thread_list[:]:
             try:
-                if thread.is_alive():
-                    thread.join(timeout=1)
+                remaining = max(0, cleanup_timeout - (time.time() - cleanup_start))
+                if remaining > 0:
+                    thread.join(timeout=remaining)
             except:
                 pass
         
-        # Print final stats if available
-        if hasattr(self, '_print_final_stats'):
+        # Clear thread list
+        self.thread_list.clear()
+        
+        # Stop stats thread if exists
+        if self._stats_thread and self._stats_thread.is_alive():
             try:
-                self._print_final_stats()
+                self._stats_thread.join(timeout=0.2)  # Short timeout for stats thread
             except:
                 pass
         
         UI.print_success("Operation stopped successfully")
 
     def show_stats(self):
-        """This method should be overridden by child classes"""
-        pass
+        """Show stats in a separate thread"""
+        if self._stats_thread and self._stats_thread.is_alive():
+            return
+            
+        self._stats_thread = threading.Thread(target=self._show_stats_loop)
+        self._stats_thread.daemon = True
+        self._stats_thread.start()
 
 def validate_target(target: str, skip_prompt: bool = False) -> Tuple[Optional[str], bool]:
     """

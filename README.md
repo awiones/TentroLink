@@ -8,7 +8,7 @@
 
 <p>  
   <a href="https://github.com/awiones/TentroLink">
-    <img src="https://img.shields.io/badge/version-0.3-blue?style=for-the-badge">
+    <img src="https://img.shields.io/badge/version-0.4-blue?style=for-the-badge">
   </a>  
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge">
@@ -38,7 +38,9 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 | 🔹 TCP Flooding     | Optimized connection handling with pool management     |
 | 🔹 HTTP Flooding    | Advanced HTTP/HTTPS flooding with custom payloads      |
 | 🔹 TOR2WEB Flooding | Anonymous penetration testing capabilities             |
-| 🔹 SYN Flooding     | Advanced SYN packet management _(coming soon)_         |
+| 🔹 SYN Flooding     | TCP SYN packet flooding with IP spoofing support       |
+
+> **NOTE: Some features like SYN flooding require root/administrator privileges for full capabilities**
 
 ## 🚀 Installation
 
@@ -72,7 +74,7 @@ python main.py [attack_method] -t [targets] [options]
 | ------ | -------------------------------------------------- | ------------ |
 | `udp`  | UDP flood operation with customizable packet sizes | 53           |
 | `tcp`  | TCP flood operation with connection pooling        | 80           |
-| `syn`  | SYN flood operation _(coming soon)_                | 80           |
+| `syn`  | SYN flood operation with IP spoofing support       | 80           |
 | `http` | HTTP flood operation                               | 80           |
 
 ### Common Options
@@ -96,6 +98,9 @@ python main.py udp -t 192.168.1.1 -p 53 -d 30
 
 # TCP test with multiple ports
 python main.py tcp -t 192.168.1.1 -p 80,443 -d 60 -T 10
+
+# SYN flood test with high thread count
+python main.py syn -t example.com -p 80 -T 100 -d 60
 
 # Test with automatic proxy acquisition
 python main.py udp -t 192.168.1.1 --proxy auto
@@ -162,18 +167,33 @@ python main.py udp -t 192.168.1.0/24 -p 80-100 -d 120
 python main.py tcp -t 192.168.1.1,192.168.1.2 -p http,https -d 60 -T 20
 ```
 
-## 📸 Screenshots  
+### SYN Testing
+
+```bash
+# Basic SYN flood test
+python main.py syn -t example.com -p 80 -d 60 -T 50
+
+# Multi-port SYN flooding
+python main.py syn -t example.com -p 80,443 -T 100 -d 120
+
+# Skip target validation
+python main.py syn -t example.com -p 80 -T 100 -y
+```
+
+> **Note**: The SYN flooding module is currently experiencing lower than expected BPS performance. This is being investigated for improvement in future updates.
+
+## 📸 Screenshots
 
 <div align="center">  
   <img src="assets/images/test%20stat.PNG" alt="Test Statistics" width="80%"/>  
-  <p><em>Example of network test statistics output</em></p>  
+  <p><em>Example of network test statistics output</em></p>
 
-  🎥 **Watch the Demo:**  
-  <a href="https://youtu.be/t8iBKDLMi8Q" target="_blank">  
-    <img src="https://img.youtube.com/vi/t8iBKDLMi8Q/maxresdefault.jpg" alt="YouTube Video Thumbnail" width="80%"/>  
-  </a>  
+🎥 **Watch the Demo:**  
+ <a href="https://youtu.be/t8iBKDLMi8Q" target="_blank">  
+ <img src="https://img.youtube.com/vi/t8iBKDLMi8Q/maxresdefault.jpg" alt="YouTube Video Thumbnail" width="80%"/>  
+ </a>
+
 </div>
-
 
 ## 🔍 Technical Details
 
