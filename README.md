@@ -234,7 +234,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📚 References
 
-- [Network Penetration Testing Methodology](https://example.com)
 - [TCP/IP Protocol Suite RFC](https://www.rfc-editor.org/)
 - [Python Socket Programming](https://docs.python.org/3/library/socket.html)
 
