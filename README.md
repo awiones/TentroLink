@@ -8,7 +8,7 @@
 
 <p>  
   <a href="https://github.com/awiones/TentroLink">
-    <img src="https://img.shields.io/badge/version-0.4-blue?style=for-the-badge">
+    <img src="https://img.shields.io/badge/version-0.5-blue?style=for-the-badge">
   </a>  
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge">
