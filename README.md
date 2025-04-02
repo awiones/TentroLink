@@ -32,7 +32,7 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 > **IMPORTANT**: TentroLink is designed and should be used ONLY for authorized network testing, security research, and educational purposes. Usage of this tool against targets without explicit permission is illegal and unethical. The developers of TentroLink assume no liability and are not responsible for any misuse or damage caused by this tool.
 >
 > **You are responsible for your actions. Use this tool responsibly and legally.**
-> > **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**z
+> > **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**
 
 ## 🛠️ Key Features
 
