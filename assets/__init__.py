@@ -15,6 +15,7 @@ from .methods import (
     TOR2WebFlooder,
     SYNFlooder
 )
+from .layer7 import OVHFlooder, CloudflareBypass
 from .utilities import AttackModule, UI, Style
 
 # Ensure cache directory exists
@@ -32,6 +33,8 @@ __all__ = [
     'HTTPFlooder',
     'TOR2WebFlooder',
     'SYNFlooder',
+    'OVHFlooder',
+    'CloudflareBypass',
     'AttackModule',
     'UI',
     'Style'

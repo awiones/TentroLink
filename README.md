@@ -32,17 +32,20 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 > **IMPORTANT**: TentroLink is designed and should be used ONLY for authorized network testing, security research, and educational purposes. Usage of this tool against targets without explicit permission is illegal and unethical. The developers of TentroLink assume no liability and are not responsible for any misuse or damage caused by this tool.
 >
 > **You are responsible for your actions. Use this tool responsibly and legally.**
-> > **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**
+>
+> > **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**z
 
 ## 🛠️ Key Features
 
-| Feature             | Description                                            |
-| ------------------- | ------------------------------------------------------ |
-| 🔹 UDP Flooding     | Enhanced DNS attack techniques with optimized payloads |
-| 🔹 TCP Flooding     | Optimized connection handling with pool management     |
-| 🔹 HTTP Flooding    | Advanced HTTP/HTTPS flooding with custom payloads      |
-| 🔹 TOR2WEB Flooding | Anonymous penetration testing capabilities             |
-| 🔹 SYN Flooding     | TCP SYN packet flooding with IP spoofing support       |
+| Feature               | Description                                            |
+| --------------------- | ------------------------------------------------------ |
+| 🔹 UDP Flooding       | Enhanced DNS attack techniques with optimized payloads |
+| 🔹 TCP Flooding       | Optimized connection handling with pool management     |
+| 🔹 HTTP Flooding      | Advanced HTTP/HTTPS flooding with custom payloads      |
+| 🔹 TOR2WEB Flooding   | Anonymous penetration testing capabilities             |
+| 🔹 SYN Flooding       | TCP SYN packet flooding with IP spoofing support       |
+| 🔹 Minecraft Flooding | Multi-protocol Minecraft server testing module         |
+| 🔹 Layer 7 OVH Bypass | Advanced OVH protection bypass with adaptive sizing    |
 
 > **NOTE: Some features like SYN flooding require root/administrator privileges for full capabilities**
 
@@ -74,12 +77,14 @@ python main.py [attack_method] -t [targets] [options]
 
 ### Available Testing Methods
 
-| Method | Description                                        | Default Port |
-| ------ | -------------------------------------------------- | ------------ |
-| `udp`  | UDP flood operation with customizable packet sizes | 53           |
-| `tcp`  | TCP flood operation with connection pooling        | 80           |
-| `syn`  | SYN flood operation with IP spoofing support       | 80           |
-| `http` | HTTP flood operation                               | 80           |
+| Method      | Description                                        | Default Port |
+| ----------- | -------------------------------------------------- | ------------ |
+| `udp`       | UDP flood operation with customizable packet sizes | 53           |
+| `tcp`       | TCP flood operation with connection pooling        | 80           |
+| `syn`       | SYN flood operation with IP spoofing support       | 80           |
+| `http`      | HTTP flood operation                               | 80           |
+| `minecraft` | Minecraft server testing module                    | 25565        |
+| `ovh`       | Layer 7 OVH protection bypass                      | 80           |
 
 ### Common Options
 
@@ -143,6 +148,20 @@ python main.py http -t example.com -p 443 --method GET --path /api/v1/test
 
 - `--method`: HTTP method to use (GET/POST/HEAD, default: GET)
 - `--path`: Target URL path (default: /)
+
+### Minecraft Testing
+
+```bash
+# Minecraft server testing
+python main.py minecraft -t mc.example.com -p 25565 -T 10 -d 60
+```
+
+### OVH Bypass Testing
+
+```bash
+# OVH bypass with optimal configuration
+python main.py ovh -t example.com -T 10 -d 60 --path /api/v1
+```
 
 ### Proxy Configuration
 

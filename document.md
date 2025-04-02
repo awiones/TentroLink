@@ -1,4 +1,4 @@
-# TentroLink v0.4 Documentation
+# TentroLink Documentation
 
 <div align="center">
 <img src="https://github.com/awiones/TentroLink/blob/main/assets/images/_Qbi9yCfTcG023xENbqkmA.jpg" alt="TentroLink Logo" width="250"/>
@@ -13,23 +13,29 @@
 2. [Installation](#installation)
 3. [Core Concepts](#core-concepts)
 4. [Command Line Interface](#command-line-interface)
-5. [Attack Modules](#attack-modules)
+5. [TentroLink v0.1 Documentation](#tentrolink-v01-documentation)
    - [UDP Flooding](#udp-flooding)
    - [TCP Flooding](#tcp-flooding)
+6. [TentroLink v0.2 Documentation](#tentrolink-v02-documentation)
    - [HTTP Flooding](#http-flooding)
    - [TOR2WEB Flooding](#tor2web-flooding)
+7. [TentroLink v0.3 Documentation](#tentrolink-v03-documentation)
    - [SYN Flooding](#syn-flooding)
-6. [Proxy Management](#proxy-management)
-7. [Target Specification](#target-specification)
-8. [Performance Metrics](#performance-metrics)
-9. [Advanced Usage](#advanced-usage)
-10. [Troubleshooting](#troubleshooting)
-11. [Legal Considerations](#legal-considerations)
-12. [Technical Reference](#technical-reference)
+8. [TentroLink v0.4 Documentation](#tentrolink-v04-documentation)
+   - [Minecraft Flooding](#minecraft-flooding)
+9. [TentroLink v0.5 Documentation](#tentrolink-v05-documentation)
+   - [Layer 7 OVH Bypass Flooding](#layer-7-ovh-bypass-flooding)
+10. [Proxy Management](#proxy-management)
+11. [Target Specification](#target-specification)
+12. [Performance Metrics](#performance-metrics)
+13. [Advanced Usage](#advanced-usage)
+14. [Troubleshooting](#troubleshooting)
+15. [Legal Considerations](#legal-considerations)
+16. [Technical Reference](#technical-reference)
 
 ## Introduction
 
-TentroLink is an advanced network testing toolkit designed for legitimate security testing and network resilience evaluation. Version 0.4 introduces several enhancements to the core functionality and adds new testing capabilities, including the SYN flooding module.
+TentroLink is an advanced network testing toolkit designed for legitimate security testing and network resilience evaluation. The tool has evolved across multiple versions, with each release adding new testing capabilities.
 
 ### Purpose
 
@@ -125,14 +131,9 @@ python main.py [attack_method] -t [targets] [options]
 | `-d, --duration` | Duration in seconds                       | 60              |
 | `-T, --threads`  | Number of threads                         | Method-specific |
 
-### Proxy Options
+## TentroLink v0.1 Documentation
 
-| Option            | Description                       | Default |
-| ----------------- | --------------------------------- | ------- |
-| `--proxy`         | Use proxies (file path or "auto") | None    |
-| `--proxy-threads` | Threads for proxy validation      | 10      |
-
-## Attack Modules
+The initial release of TentroLink introduced the core functionality and two primary attack modules.
 
 ### UDP Flooding
 
@@ -203,6 +204,10 @@ The TCP module:
 - Establishes and maintains multiple TCP connections
 - Sends data through established connections
 - Implements connection pooling for efficiency
+
+## TentroLink v0.2 Documentation
+
+Version 0.2 expanded the toolkit's capabilities with application layer testing modules.
 
 ### HTTP Flooding
 
@@ -277,9 +282,13 @@ The TOR2WEB module:
 - Rotates user agents to avoid detection
 - Provides anonymized testing capabilities
 
+## TentroLink v0.3 Documentation
+
+Version 0.3 introduced low-level network testing capabilities with the SYN flooding module.
+
 ### SYN Flooding
 
-The SYN flooding module (added in v0.4) tests target systems' ability to handle TCP SYN packet floods.
+The SYN flooding module tests target systems' ability to handle TCP SYN packet floods.
 
 > **Note**: Currently there is a known issue where the BPS (bytes per second) throughput is lower than expected. This is being investigated and will be fixed in a future update.
 
@@ -326,6 +335,202 @@ The SYN flood module:
 1. **BPS Performance**: Currently experiencing lower than expected bytes-per-second throughput. Working on optimization.
 2. **Raw Socket Requirements**: Full capabilities (IP spoofing, custom packets) require root/admin privileges
 3. **Platform Specific**: Some features may be limited on certain operating systems
+
+## TentroLink v0.4 Documentation
+
+Version 0.4 added specialized testing for gaming servers with the Minecraft flooding module.
+
+### Minecraft Flooding
+
+The Minecraft flooding module tests servers by simulating multiple connection attempts using various protocol versions and ping requests.
+
+#### Command Syntax
+
+```bash
+python main.py minecraft -t [targets] [options]
+```
+
+#### Specific Options
+
+| Option           | Description         | Default |
+| ---------------- | ------------------- | ------- |
+| `-p, --ports`    | Target ports        | 25565   |
+| `-T, --threads`  | Number of threads   | 5       |
+| `-d, --duration` | Duration in seconds | 60      |
+
+#### Technical Details
+
+The Minecraft flood module:
+
+- Supports multiple protocol versions (47-754)
+- Simulates server list pings and handshakes
+- Uses connection pooling for efficiency
+- Provides real-time success rate monitoring
+
+#### Performance Characteristics
+
+- Optimal thread count: 5-10 per target
+- Sockets per thread: 100 (configurable)
+- Protocol versions: 1.8.x through 1.16.x
+
+#### Examples
+
+```bash
+# Basic Minecraft flood test
+python main.py minecraft -t mc.example.com -d 60
+
+# High intensity test
+python main.py minecraft -t mc.example.com -T 10 -d 120
+
+# Custom port
+python main.py minecraft -t mc.example.com -p 25566 -T 5
+```
+
+## TentroLink v0.5 Documentation
+
+Version 0.5 introduced advanced bypass techniques with the Layer 7 OVH Bypass Flooding module.
+
+### Layer 7 OVH Bypass Flooding
+
+The OVH bypass implementation features adaptive packet sizing and connection management for testing against systems with OVH protection.
+
+#### Command Syntax
+
+```bash
+python main.py ovh -t [targets] [options]
+```
+
+#### Development History & Challenges
+
+The OVH bypass implementation went through several iterations:
+
+1. Initial Implementation (v0.5-alpha)
+
+   - Basic functionality achieved
+   - High packet sending capability
+   - Very low success rate (~10-20%)
+
+   ```
+   [17:49:34] Target: 51.195.234.56 | Port: 22 | Method: OVH | RPS: 28.00 | BPS: 2.73 MB | Success Rate: 20%
+   ```
+
+2. First Optimization (v0.5-beta)
+
+   - Improved success rate with smaller packets
+   - Thread count sensitivity discovered
+   - Optimal performance at 10 threads
+
+   ```
+   [18:00:15] Target: 51.195.234.56 | Port: 22 | Method: OVH | RPS: 25.00 | BPS: 2.44 MB | Success Rate: 90%
+   ```
+
+3. Thread Scaling Issues
+   - Performance degradation above 20 threads
+   - Complete failure at 100 threads
+   - Root cause: socket pool exhaustion
+
+#### Specific Options
+
+| Option           | Description           | Default  |
+| ---------------- | --------------------- | -------- |
+| `-t, --targets`  | Target specification  | Required |
+| `-p, --ports`    | Target ports          | 80,443   |
+| `-T, --threads`  | Number of threads     | 10       |
+| `-d, --duration` | Duration in seconds   | 60       |
+| `--path`         | URL path for requests | /        |
+
+#### Performance Characteristics
+
+- **Optimal Configuration**:
+
+  - Threads: 10-15
+  - Packet Size: Adaptive (8KB-65KB)
+  - Connection Pool: 500 max
+
+- **Thread Scaling Behavior**:
+  ```
+  5 threads:  Low performance (~10 RPS)
+  10 threads: Optimal (~25-30 RPS)
+  20 threads: Degraded (~15 RPS)
+  100 threads: Connection failures (0 RPS)
+  ```
+
+#### Implementation Details
+
+1. **Adaptive Packet Sizing**
+
+   - Starting size: 8KB
+   - Maximum size: 65KB
+   - Dynamic adjustment based on success rate
+
+2. **Connection Management**
+
+   - Socket pooling with max 500 connections
+   - Automatic backoff on failures
+   - Connection reuse when possible
+
+3. **Port-Specific Optimizations**
+   ```python
+   port_settings = {
+       22: {  # SSH port
+           "max_packet_size": 4096,
+           "timeout": 1.5
+       },
+       80: {  # HTTP
+           "max_packet_size": 65500,
+           "timeout": 3.0
+       }
+   }
+   ```
+
+#### Known Limitations
+
+1. **Thread Count Sensitivity**
+
+   - Best performance: 10-15 threads
+   - Fails with high thread counts (>50)
+   - Requires manual thread count optimization
+
+2. **Connection Management**
+
+   - Socket pool exhaustion with high thread counts
+   - Connection reuse limited by server timeouts
+
+3. **Performance Bottlenecks**
+   - Socket creation overhead
+   - Connection establishment delays
+   - Resource contention at high thread counts
+
+#### Usage Examples
+
+```bash
+# Optimal configuration
+python main.py ovh -t example.com -T 10 -d 60
+
+# With custom path
+python main.py ovh -t example.com -T 10 --path /api/v1
+
+# Multiple ports
+python main.py ovh -t example.com -p 80,443 -T 10
+```
+
+#### Best Practices
+
+1. **Thread Count**
+
+   - Start with 10 threads
+   - Increase gradually if stable
+   - Never exceed 50 threads
+
+2. **Duration**
+
+   - Test with short durations first (30s)
+   - Increase duration after confirming stability
+
+3. **Monitoring**
+   - Watch success rate closely
+   - Adjust thread count based on performance
+   - Stop if success rate drops below 50%
 
 ## Proxy Management
 

