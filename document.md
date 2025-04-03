@@ -677,14 +677,6 @@ python main.py http -t 192.168.1.1 -d 30
    python main.py udp -t 192.168.1.1 -T 5 -s 1024
    ```
 
-### Debugging
-
-Enable verbose output for detailed logging:
-
-```bash
-python main.py udp -t 192.168.1.1 -v
-```
-
 ## Legal Considerations
 
 ### Authorized Testing Only
