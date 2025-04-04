@@ -16,10 +16,13 @@ from assets.methods import (
     UDPFlooder,
     TCPFlooder,
     HTTPFlooder,
-    TOR2WebFlooder,
-    SYNFlooder
+    TOR2WebFlooder
 )
+from assets.syn_method import SYNFlooder
+from assets.minecraft_methods import MinecraftFlooder
 from assets.layer7 import OVHFlooder, CloudflareBypass
+
+__version__ = "0.5.2"
 
 # Target handling and validation
 class TargetManager:
@@ -162,6 +165,8 @@ def main():
     
     # Create the base parser for global options
     base_parser = argparse.ArgumentParser(add_help=False)
+    base_parser.add_argument('--version', action='version', 
+                           version=f'TentroLink v{__version__}')
     base_parser.add_argument('--no-color', action='store_true', 
                            help='Disable colored output')
     base_parser.add_argument('-v', '--verbose', action='store_true',
@@ -234,8 +239,6 @@ def main():
                            - Port range (e.g., 80-100)
                            - Service names (e.g., http,https,dns)
                            Default: method-specific ports''')
-    udp_parser.add_argument('-s', '--size', type=int, default=30720,  # 30MB = 30 * 1024
-                           help='Size of each UDP packet in bytes (default: 30KB)')
     udp_parser.add_argument('-d', '--duration', type=int, default=60,
                            help='Duration of the attack in seconds (default: 60)')
     udp_parser.add_argument('-T', '--threads', type=int, default=5,
@@ -293,8 +296,6 @@ def main():
                            help='Target specification (same format as UDP flood)')
     tcp_parser.add_argument('-p', '--ports', required=False,
                            help='Port specification (optional, default: 80,443)')
-    tcp_parser.add_argument('-s', '--size', type=int, default=30720,  # 30MB = 30 * 1024
-                           help='Size of TCP packets in bytes (default: 30KB)')
     tcp_parser.add_argument('-d', '--duration', type=int, default=60,
                            help='Duration of the attack in seconds (default: 60)')
     tcp_parser.add_argument('-T', '--threads', type=int, default=10,
@@ -444,7 +445,6 @@ def main():
             active_flooder = UDPFlooder(
                 targets=targets,
                 ports=ports,
-                packet_size=args.size,
                 duration=args.duration,
                 threads=args.threads,
                 proxy_manager=proxy_manager,
@@ -455,7 +455,6 @@ def main():
             active_flooder = TCPFlooder(
                 targets=targets,
                 ports=ports,
-                packet_size=args.size,  # Add packet_size parameter
                 duration=args.duration,
                 threads=args.threads,
                 proxy_manager=proxy_manager,
@@ -495,7 +494,7 @@ def main():
             )
             active_flooder.start()
         elif args.command == 'minecraft':
-            from assets.other_methods import MinecraftFlooder
+            from assets.minecraft_methods import MinecraftFlooder
             active_flooder = MinecraftFlooder(
                 targets=targets,
                 ports=ports if ports else [25565],  # Use 25565 as default

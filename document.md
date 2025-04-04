@@ -147,10 +147,9 @@ python main.py udp -t [targets] [options]
 
 #### Specific Options
 
-| Option        | Description                  | Default |
-| ------------- | ---------------------------- | ------- |
-| `-s, --size`  | Size of UDP packets in bytes | 30720   |
-| `-p, --ports` | Target ports                 | 53      |
+| Option        | Description  | Default |
+| ------------- | ------------ | ------- |
+| `-p, --ports` | Target ports | 53      |
 
 #### Examples
 
@@ -158,8 +157,8 @@ python main.py udp -t [targets] [options]
 # Basic UDP test
 python main.py udp -t 192.168.1.1 -p 53 -d 30
 
-# Custom packet size
-python main.py udp -t 192.168.1.1 -p 53 -s 1024 -d 60 -T 5
+# Multiple ports with higher threads
+python main.py udp -t 192.168.1.1 -p 53,67 -d 60 -T 5
 ```
 
 #### Technical Details
@@ -182,10 +181,9 @@ python main.py tcp -t [targets] [options]
 
 #### Specific Options
 
-| Option        | Description                  | Default |
-| ------------- | ---------------------------- | ------- |
-| `-s, --size`  | Size of TCP packets in bytes | 30720   |
-| `-p, --ports` | Target ports                 | 80,443  |
+| Option        | Description  | Default |
+| ------------- | ------------ | ------- |
+| `-p, --ports` | Target ports | 80,443  |
 
 #### Examples
 
@@ -617,12 +615,12 @@ After completion, TentroLink provides a summary including:
 
 ## Advanced Usage
 
-### Customizing Payloads
+### Customizing Thread Count
 
-For UDP and TCP flooding, you can customize the packet size:
+For UDP and TCP flooding, you can adjust the thread count to control intensity:
 
 ```bash
-python main.py udp -t 192.168.1.1 -p 53 -s 2048
+python main.py udp -t 192.168.1.1 -p 53 -T 10
 ```
 
 ### Testing Multiple Targets

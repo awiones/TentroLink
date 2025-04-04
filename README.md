@@ -77,14 +77,14 @@ python main.py [attack_method] -t [targets] [options]
 
 ### Available Testing Methods
 
-| Method      | Description                                        | Default Port |
-| ----------- | -------------------------------------------------- | ------------ |
-| `udp`       | UDP flood operation with customizable packet sizes | 53           |
-| `tcp`       | TCP flood operation with connection pooling        | 80           |
-| `syn`       | SYN flood operation with IP spoofing support       | 80           |
-| `http`      | HTTP flood operation                               | 80           |
-| `minecraft` | Minecraft server testing module                    | 25565        |
-| `ovh`       | Layer 7 OVH protection bypass                      | 80           |
+| Method      | Description                                  | Default Port |
+| ----------- | -------------------------------------------- | ------------ |
+| `udp`       | UDP flood operation                          | 53           |
+| `tcp`       | TCP flood operation with connection pooling  | 80           |
+| `syn`       | SYN flood operation with IP spoofing support | 80           |
+| `http`      | HTTP flood operation                         | 80           |
+| `minecraft` | Minecraft server testing module              | 25565        |
+| `ovh`       | Layer 7 OVH protection bypass                | 80           |
 
 ### Common Options
 
@@ -120,7 +120,7 @@ python main.py udp -t 192.168.1.1 --proxy auto
 ### UDP Testing
 
 ```bash
-# Custom packet size
+# Basic UDP test with threads
 python main.py udp -t 192.168.1.1 -p 53 -d 60 -T 5
 ```
 

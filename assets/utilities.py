@@ -15,7 +15,7 @@ __ __|             |
    |   _ \  __ \   __|   _ \    __|
    |   __/  |   |  |    (   |  |   
   _| \___| _|  _| \__| \___/  _|   
-  Tentor V0.5
+  Tentor V0.5.2
   Made By github.com/awiones
 """
     return banner
@@ -164,6 +164,12 @@ class AttackModule:
         self._stop_event = threading.Event()
         self.thread_list = []
         self._stats_thread = None
+    
+    def calculate_packet_size(self, threads: int, base_size: int = 1024) -> int:
+        """Calculate packet size based on thread count"""
+        # Scale packet size with thread count, but cap it at 65000
+        scaled_size = base_size * (1 + (threads // 2))
+        return min(scaled_size, 65000)
     
     def start(self):
         """Start the operation"""

@@ -12,9 +12,9 @@ from .methods import (
     UDPFlooder,
     TCPFlooder,
     HTTPFlooder,
-    TOR2WebFlooder,
-    SYNFlooder
+    TOR2WebFlooder
 )
+from .syn_method import SYNFlooder
 from .layer7 import OVHFlooder, CloudflareBypass
 from .utilities import AttackModule, UI, Style
 
