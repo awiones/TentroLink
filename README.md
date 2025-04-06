@@ -4,7 +4,7 @@
 
 <img src="https://github.com/awiones/TentroLink/blob/main/assets/images/_Qbi9yCfTcG023xENbqkmA.jpg" alt="TentroLink Logo" width="250"/>
 
-**Advanced Network Testing & Security Assessment Toolkit**
+**Network Testing**
 
 <p>  
   <a href="https://github.com/awiones/TentroLink">
