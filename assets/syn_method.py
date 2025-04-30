@@ -13,6 +13,15 @@ class SYNFlooder(AttackModule):
     def __init__(self, targets: List[str], ports: List[int], duration: int = 60, 
                  threads: int = 5, debug: bool = False, proxy_manager=None, skip_prompt: bool = False):
         super().__init__(targets, ports, skip_prompt)
+        
+        # Initialize logger first
+        self.logger = logging.getLogger(self.__class__.__name__)
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+        else:
+            self.logger.setLevel(logging.INFO)
+
+        # Rest of initialization
         self.duration = duration
         self.threads = threads
         self.debug = debug

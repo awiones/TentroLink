@@ -6,3 +6,4 @@ cache
 .json
 proxy_cache.json
 venv
+path

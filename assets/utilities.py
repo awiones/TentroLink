@@ -15,7 +15,7 @@ __ __|             |
    |   _ \  __ \   __|   _ \    __|
    |   __/  |   |  |    (   |  |   
   _| \___| _|  _| \__| \___/  _|   
-  Tentor V0.5.2
+  Tentor V0.6.0
   Made By github.com/awiones
 """
     return banner
@@ -219,6 +219,50 @@ class AttackModule:
         self._stats_thread = threading.Thread(target=self._show_stats_loop)
         self._stats_thread.daemon = True
         self._stats_thread.start()
+
+    def monitor_performance(self):
+        """Base monitor_performance implementation"""
+        last_update = time.time()
+        last_stats = self.stats.copy()
+        
+        while self.running:
+            try:
+                time.sleep(1.0)  # Update every second
+                current_time = time.time()
+                elapsed = current_time - last_update
+                
+                if elapsed >= 1.0:
+                    current_stats = self.stats.copy()
+                    
+                    # Calculate rates
+                    pps = (current_stats["packets_sent"] - last_stats["packets_sent"]) / elapsed
+                    bytes_sent = current_stats["bytes_sent"] - last_stats["bytes_sent"]
+                    mbps = (bytes_sent * 8) / (1024 * 1024 * elapsed)
+                    
+                    # Calculate success rate
+                    total = current_stats["packets_sent"]
+                    success_rate = int((current_stats["successful"] / total * 100) 
+                                     if total > 0 else 0)
+                    
+                    # Format and print status for each target/port
+                    timestamp = time.strftime("%H:%M:%S", time.localtime())
+                    for target in self.targets:
+                        for port in self.ports:
+                            status_line = (
+                                f"[{timestamp}] Target: {target} | "
+                                f"Port: {port} | PPS: {pps:.2f} | "
+                                f"BPS: {mbps:.2f} MB | Success Rate: {success_rate}%"
+                            )
+                            print(status_line)
+                    
+                    # Update tracking values
+                    last_stats = current_stats.copy()
+                    last_update = current_time
+                    
+            except Exception as e:
+                if hasattr(self, 'debug') and self.debug:
+                    print(f"Error in performance monitoring: {e}")
+                time.sleep(1)
 
 def validate_target(target: str, skip_prompt: bool = False) -> Tuple[Optional[str], bool]:
     """
