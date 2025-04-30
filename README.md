@@ -37,15 +37,15 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 
 ## 🛠️ Key Features
 
-| Feature               | Description                                            |
-| --------------------- | ------------------------------------------------------ |
-| 🔹 UDP Flooding       | Enhanced DNS attack techniques with optimized payloads |
-| 🔹 TCP Flooding       | Optimized connection handling with pool management     |
-| 🔹 HTTP Flooding      | Advanced HTTP/HTTPS flooding with custom payloads      |
-| 🔹 TOR2WEB Flooding   | Anonymous penetration testing capabilities             |
-| 🔹 SYN Flooding       | TCP SYN packet flooding with IP spoofing support       |
-| 🔹 Minecraft Flooding | Multi-protocol Minecraft server testing module         |
-| 🔹 Layer 7 OVH Bypass | Advanced OVH protection bypass with adaptive sizing    |
+| Feature               | Description                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| 🔹 UDP Flooding       | Enhanced DNS attack techniques with optimized payloads                                |
+| 🔹 TCP Flooding       | Optimized connection handling with pool management                                    |
+| 🔹 HTTP Flooding      | Advanced HTTP/HTTPS flooding with custom payloads                                     |
+| 🔹 TOR2WEB Flooding   | Anonymous penetration testing capabilities                                            |
+| 🔹 SYN Flooding       | TCP SYN packet flooding with IP spoofing support                                      |
+| 🔹 Minecraft Flooding | Multi-protocol Minecraft server testing module                                        |
+| 🔹 Layer 7 OVH Bypass | Advanced OVH-4 protection bypass with adaptive sizing (OVH-1,2,3 support coming soon) |
 
 > **NOTE: Some features like SYN flooding require root/administrator privileges for full capabilities**
 
@@ -162,6 +162,8 @@ python main.py minecraft -t mc.example.com -p 25565 -T 10 -d 60
 # OVH bypass with optimal configuration
 python main.py ovh -t example.com -T 10 -d 60 --path /api/v1
 ```
+
+> **Note**: Currently, only OVH-4 protection bypass is supported. Support for OVH-1, OVH-2, and OVH-3 will be added in future updates.
 
 ### Proxy Configuration
 

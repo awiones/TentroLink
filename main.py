@@ -23,7 +23,7 @@ from assets.syn_method import SYNFlooder
 from assets.minecraft_methods import MinecraftFlooder
 from assets.layer7 import OVHFlooder, CloudflareBypass
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 def create_base_parser() -> argparse.ArgumentParser:
     """Create the base parser with global options"""
@@ -464,28 +464,29 @@ def main():
         elif args.command == 'minecraft':
             try:
                 from assets.minecraft_methods import MinecraftFlooder
-                active_flooder = MinecraftFlooder(
-                    targets=targets,
-                    ports=ports if ports else [25565],
-                    duration=args.duration,
-                    threads=args.threads,
-                    debug=args.verbose,
-                    skip_prompt=args.yes
-                )
-                try:
-                    asyncio.run(active_flooder.start())
-                except KeyboardInterrupt:
-                    asyncio.run(active_flooder.stop())  # Properly await stop
-                    sys.exit(0)
-                except Exception as e:
-                    if args.verbose:
-                        UI.print_error(f"Minecraft flood error: {str(e)}")
-                    sys.exit(1)
+            except ImportError as e:
+                if "mcstatus" in str(e):
+                    UI.print_error("Missing required module 'mcstatus'. Please install it with: pip install mcstatus")
+                else:
+                    UI.print_error(f"Error importing Minecraft module: {e}")
+                sys.exit(1)
+                
+            active_flooder = MinecraftFlooder(
+                targets=targets,
+                ports=ports if ports else [25565],
+                duration=args.duration,
+                threads=args.threads,
+                debug=args.verbose,
+                skip_prompt=args.yes
+            )
+            try:
+                asyncio.run(active_flooder.start())
+            except KeyboardInterrupt:
+                asyncio.run(active_flooder.stop())  # Properly await stop
+                sys.exit(0)
             except Exception as e:
-                UI.print_error(f"Failed to start Minecraft flood: {str(e)}")
                 if args.verbose:
-                    import traceback
-                    traceback.print_exc()
+                    UI.print_error(f"Minecraft flood error: {str(e)}")
                 sys.exit(1)
         elif args.command == 'ovh':
             active_flooder = OVHFlooder(

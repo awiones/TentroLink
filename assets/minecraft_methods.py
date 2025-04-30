@@ -11,14 +11,21 @@ import asyncio
 import threading
 from typing import List, Dict, Optional, Tuple, Union
 from .utilities import AttackModule, UI, Style
-import mcstatus
-from mcstatus.pinger import PingResponse
 
 class MinecraftFlooder(AttackModule):
     def __init__(self, targets: List[str], ports: List[int], duration: int = 60,
                  threads: int = 5, debug: bool = False, skip_prompt: bool = False,
                  proxies: List[str] = None, proxy_type: str = "socks5",
                  proxy_timeout: float = 2.0, proxy_rotation: bool = True):
+        
+        # Check for required dependency before proceeding
+        try:
+            import mcstatus
+            from mcstatus.pinger import PingResponse
+            self.mcstatus = mcstatus
+        except ImportError:
+            raise ImportError("Missing required module 'mcstatus'. Please install it with: pip install mcstatus")
+            
         super().__init__(targets, ports, skip_prompt)
         self.duration = duration
         self.threads = threads
@@ -877,6 +884,14 @@ class MinecraftLegitimateClient(AttackModule):
     """
     def __init__(self, targets: List[str], ports: List[int], duration: int = 60,
                  threads: int = 5, debug: bool = False, skip_prompt: bool = False):
+                 
+        # Check for required dependency before proceeding
+        try:
+            import mcstatus
+            self.mcstatus = mcstatus
+        except ImportError:
+            raise ImportError("Missing required module 'mcstatus'. Please install it with: pip install mcstatus")
+            
         super().__init__(targets, ports, skip_prompt)
         self.duration = duration
         self.threads = threads
@@ -974,7 +989,7 @@ class MinecraftLegitimateClient(AttackModule):
         async with self._connection_semaphore:
             try:
                 # Create server object
-                server = mcstatus.JavaServer(f"{target}:{port}")
+                server = self.mcstatus.JavaServer(f"{target}:{port}")
                 
                 # Perform status query (simulates browser refresh)
                 status = await server.async_status()
@@ -1001,7 +1016,7 @@ class MinecraftLegitimateClient(AttackModule):
         async with self._connection_semaphore:
             try:
                 # Create server object
-                server = mcstatus.JavaServer(f"{target}:{port}")
+                server = self.mcstatus.JavaServer(f"{target}:{port}")
                 
                 # First do status query (launcher checks server before connecting)
                 status = await server.async_status()
@@ -1040,12 +1055,12 @@ class MinecraftLegitimateClient(AttackModule):
                 # But we'll try the provided port first, then 19132 if that fails
                 try:
                     # Try the provided port first
-                    server = mcstatus.BedrockServer(f"{target}:{port}")
+                    server = self.mcstatus.BedrockServer(f"{target}:{port}")
                     status = await server.async_status()
                 except:
                     # Fall back to default Bedrock port
                     bedrock_port = 19132
-                    server = mcstatus.BedrockServer(f"{target}:{bedrock_port}")
+                    server = self.mcstatus.BedrockServer(f"{target}:{bedrock_port}")
                     status = await server.async_status()
                 
                 # Process response
@@ -1070,7 +1085,7 @@ class MinecraftLegitimateClient(AttackModule):
         async with self._connection_semaphore:
             try:
                 # Create server object
-                server = mcstatus.JavaServer(f"{target}:{port}")
+                server = self.mcstatus.JavaServer(f"{target}:{port}")
                 
                 # Perform full query (requires query to be enabled on server)
                 try:
