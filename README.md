@@ -37,15 +37,15 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 
 ## 🛠️ Key Features
 
-| Feature               | Description                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| 🔹 UDP Flooding       | Enhanced DNS attack techniques with optimized payloads                                |
-| 🔹 TCP Flooding       | Optimized connection handling with pool management                                    |
-| 🔹 HTTP Flooding      | Advanced HTTP/HTTPS flooding with custom payloads                                     |
-| 🔹 TOR2WEB Flooding   | Anonymous penetration testing capabilities                                            |
-| 🔹 SYN Flooding       | TCP SYN packet flooding with IP spoofing support                                      |
-| 🔹 Minecraft Flooding | Multi-protocol Minecraft server testing module                                        |
-| 🔹 Layer 7 OVH Bypass | Advanced OVH-4 protection bypass with adaptive sizing (OVH-1,2,3 support coming soon) |
+| Feature               | Description                                                          |
+| --------------------- | -------------------------------------------------------------------- |
+| 🔹 UDP Flooding       | DNS attack with payloads                                             |
+| 🔹 TCP Flooding       | Connection handling with pool management                             |
+| 🔹 HTTP Flooding      | HTTP/HTTPS flooding with custom payloads                             |
+| 🔹 TOR2WEB Flooding   | Anonymous penetration testing                                        |
+| 🔹 SYN Flooding       | TCP SYN packet flooding with IP spoofing                             |
+| 🔹 Minecraft Flooding | Multi-protocol Minecraft server testing                              |
+| 🔹 Layer 7 OVH Bypass | OVH-4 protection bypass with adaptive sizing (OVH-1,2,3 coming soon) |
 
 > **NOTE: Some features like SYN flooding require root/administrator privileges for full capabilities**
 
