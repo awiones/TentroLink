@@ -5,6 +5,7 @@ __pycache__
 cache
 .json
 proxy_cache.json
+venv/
 venv
 path
 v0.7.0-update.md
