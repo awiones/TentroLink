@@ -7,3 +7,5 @@ certifi>=2023.7.22
 charset-normalizer>=3.3.2
 idna>=3.4
 mcstatus>=10.0.0
+aioquic>=0.9.20
+h2>=4.1.0

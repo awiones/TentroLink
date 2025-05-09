@@ -33,7 +33,7 @@ TentroLink is an advanced network testing toolkit designed for legitimate securi
 >
 > **You are responsible for your actions. Use this tool responsibly and legally.**
 >
-> > **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**z
+> > **NOTE: This project might be not work 100% while trying to flood since the high tech security from the server/website**
 
 ## 🛠️ Key Features
 
