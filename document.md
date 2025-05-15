@@ -7,31 +7,40 @@
 
 </div>
 
+## 🚀 What's New in v0.6.4 (2025-05-15)
+
+- DNS flood now uses randomized query types (A, AAAA, TXT, NS) and multi-level subdomains for better evasion.
+- UDPFlooder generates DNS queries with advanced, randomized domain structures (multi-level, regional, service-like, long subdomains).
+- The `get_optimized_payload` method fills these templates with random values for each DNS packet, increasing unpredictability.
+- Improved warnings and guidance for DNS port 53 usage (now warns about filtering and low success rate).
+- Enhanced proxy management and validation.
+- See [updates/v0.6.4-update.md](updates/v0.6.4-update.md) for full details.
+
+> **Warning:** Most providers heavily filter DNS (port 53) traffic. DNS floods on port 53 have a low chance of success. For higher impact, consider using port 80 or other less-filtered ports.
+
+---
+
 ## Table of Contents
 
 1. [Introduction](#introduction)
 2. [Installation](#installation)
 3. [Core Concepts](#core-concepts)
 4. [Command Line Interface](#command-line-interface)
-5. [TentroLink v0.1 Documentation](#tentrolink-v01-documentation)
+5. [Attack Modules](#attack-modules)
    - [UDP Flooding](#udp-flooding)
    - [TCP Flooding](#tcp-flooding)
-6. [TentroLink v0.2 Documentation](#tentrolink-v02-documentation)
    - [HTTP Flooding](#http-flooding)
    - [TOR2WEB Flooding](#tor2web-flooding)
-7. [TentroLink v0.3 Documentation](#tentrolink-v03-documentation)
    - [SYN Flooding](#syn-flooding)
-8. [TentroLink v0.4 Documentation](#tentrolink-v04-documentation)
    - [Minecraft Flooding](#minecraft-flooding)
-9. [TentroLink v0.5 Documentation](#tentrolink-v05-documentation)
    - [Layer 7 OVH Bypass Flooding](#layer-7-ovh-bypass-flooding)
-10. [Proxy Management](#proxy-management)
-11. [Target Specification](#target-specification)
-12. [Performance Metrics](#performance-metrics)
-13. [Advanced Usage](#advanced-usage)
-14. [Troubleshooting](#troubleshooting)
-15. [Legal Considerations](#legal-considerations)
-16. [Technical Reference](#technical-reference)
+6. [Proxy Management](#proxy-management)
+7. [Target Specification](#target-specification)
+8. [Performance Metrics](#performance-metrics)
+9. [Advanced Usage](#advanced-usage)
+10. [Troubleshooting](#troubleshooting)
+11. [Legal Considerations](#legal-considerations)
+12. [Technical Reference](#technical-reference)
 
 ## Introduction
 
@@ -131,9 +140,9 @@ python main.py [attack_method] -t [targets] [options]
 | `-d, --duration` | Duration in seconds                       | 60              |
 | `-T, --threads`  | Number of threads                         | Method-specific |
 
-## TentroLink v0.1 Documentation
+## Attack Modules
 
-The initial release of TentroLink introduced the core functionality and two primary attack modules.
+TentroLink includes several attack modules, each designed for specific testing methodologies.
 
 ### UDP Flooding
 
@@ -202,10 +211,6 @@ The TCP module:
 - Establishes and maintains multiple TCP connections
 - Sends data through established connections
 - Implements connection pooling for efficiency
-
-## TentroLink v0.2 Documentation
-
-Version 0.2 expanded the toolkit's capabilities with application layer testing modules.
 
 ### HTTP Flooding
 
@@ -280,10 +285,6 @@ The TOR2WEB module:
 - Rotates user agents to avoid detection
 - Provides anonymized testing capabilities
 
-## TentroLink v0.3 Documentation
-
-Version 0.3 introduced low-level network testing capabilities with the SYN flooding module.
-
 ### SYN Flooding
 
 The SYN flooding module tests target systems' ability to handle TCP SYN packet floods.
@@ -334,10 +335,6 @@ The SYN flood module:
 2. **Raw Socket Requirements**: Full capabilities (IP spoofing, custom packets) require root/admin privileges
 3. **Platform Specific**: Some features may be limited on certain operating systems
 
-## TentroLink v0.4 Documentation
-
-Version 0.4 added specialized testing for gaming servers with the Minecraft flooding module.
-
 ### Minecraft Flooding
 
 The Minecraft flooding module tests servers by simulating multiple connection attempts using various protocol versions and ping requests.
@@ -384,10 +381,6 @@ python main.py minecraft -t mc.example.com -T 10 -d 120
 python main.py minecraft -t mc.example.com -p 25566 -T 5
 ```
 
-## TentroLink v0.5 Documentation
-
-Version 0.5 introduced advanced bypass techniques with the Layer 7 OVH Bypass Flooding module.
-
 ### Layer 7 OVH Bypass Flooding
 
 The OVH bypass implementation features adaptive packet sizing and connection management for testing against systems with OVH protection.
@@ -407,7 +400,7 @@ The OVH bypass implementation went through several iterations:
    - Basic functionality achieved
    - High packet sending capability
    - Very low success rate (~10-20%)
-  
+
    <img src="https://github.com/awiones/TentroLink/blob/main/assets/images/ovh%20bypass.PNG" alt="TEST 1" width="1400"/>
 
    ```
@@ -419,7 +412,7 @@ The OVH bypass implementation went through several iterations:
    - Improved success rate with smaller packets
    - Thread count sensitivity discovered
    - Optimal performance at 10 threads
-  
+
    <img src="https://github.com/awiones/TentroLink/blob/main/assets/images/ovh%20byp.PNG" alt="TEST 2" width="1400"/>
 
    ```
