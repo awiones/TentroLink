@@ -15,7 +15,7 @@ __ __|             |
    |   _ \  __ \   __|   _ \    __|
    |   __/  |   |  |    (   |  |   
   _| \___| _|  _| \__| \___/  _|   
-  Tentor V0.6.4
+  Tentor V0.6.5
   Made By github.com/awiones
 """
     return banner

