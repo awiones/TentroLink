@@ -23,7 +23,7 @@ from assets.syn_method import SYNFlooder
 from assets.minecraft_methods import MinecraftFlooder
 from assets.layer7 import OVHFlooder, CloudflareBypass
 
-__version__ = "0.6.5"
+__version__ = "0.6.6"
 
 def create_base_parser() -> argparse.ArgumentParser:
     """Create the base parser with global options"""
@@ -317,6 +317,10 @@ def main():
         parents=[base_parser])
     create_common_args_group(cf_parser)  # Using common args
     create_http_args_group(cf_parser)  # Add HTTP options for Cloudflare
+    cf_parser.add_argument('--bypass-method', 
+                          choices=['auto', 'cloudscraper', 'selenium', 'undetected', 'playwright'],
+                          default='auto',
+                          help='Bypass method to use (default: auto)')
 
     # Parse arguments
     args = parser.parse_args()

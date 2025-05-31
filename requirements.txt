@@ -1,3 +1,4 @@
+# Core requirements
 requests>=2.31.0
 pysocks>=1.7.1
 ipaddress>=1.0.23
@@ -9,3 +10,15 @@ idna>=3.4
 mcstatus>=10.0.0
 aioquic>=0.9.20
 h2>=4.1.0
+
+# --- Layer 7 Advanced Bypass (Cloudflare/OVH) ---
+# For cloudscraper (basic Cloudflare JS challenge bypass)
+cloudscraper>=1.2.71  # Optional, for --bypass-method cloudscraper
+
+# For Selenium/undetected-chromedriver (advanced browser bypass)
+selenium>=4.18.0  # Optional, for --bypass-method selenium/undetected
+undetected-chromedriver>=3.5.5  # Optional, for --bypass-method undetected
+webdriver-manager>=4.0.1  # Optional, for auto ChromeDriver management
+
+# For Playwright (modern browser automation)
+playwright>=1.44.0  # Optional, for --bypass-method playwright

